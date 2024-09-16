@@ -1,0 +1,11 @@
+pdf2image
+opencv-python
+validators
+imgaug
+scikit-image
+scikit-learn
+tqdm
+efficientnet == 1.0.0
+essential_generators
+editdistance
+pyclipper
