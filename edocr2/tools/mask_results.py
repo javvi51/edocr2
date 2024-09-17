@@ -30,8 +30,17 @@ def mask_img(img, gdt_boxes, tables, dimensions, frame):
         for g in gdt.values():
             for tab in g:
                 pts = np.array([(tab.x, tab.y), (tab.x+tab.w, tab.y), (tab.x+tab.w, tab.y+tab.h),(tab.x,tab.y+tab.h)], np.int32)
-                mask_img = mask_box(mask_img, pts, (94,204,243))
+                mask_img = mask_box(mask_img, pts, (94, 204, 243))
 
     if frame:
-        mask_img = mask_frame(mask_img, frame, (167,234,82))
+        mask_img = mask_frame(mask_img, frame, (167, 234, 82))
+        offset = (frame.x, frame.y)
+    else:
+        offset = (0, 0)
+
+    for dim in dimensions:
+        box = dim[1]
+        pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
+        mask_img = mask_box(mask_img, pts, (93, 206, 175))
+   
     return mask_img

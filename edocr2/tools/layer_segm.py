@@ -110,7 +110,7 @@ def find_rectangles(img):
                 rect_list.append(Rect('rect_'+str(r),x,y,w,h)) #Get a list of rectangles
                 r = r + 1
 
-    print('Number of rectangles:', len(rect_list))
+    #print('Number of rectangles:', len(rect_list))
     hierarchy = build_hierarchy(rect_list)
     
 
@@ -213,7 +213,7 @@ def cluster_criteria(clusters, GDT_thres):
 
 def segment_img(img, frame = True, GDT_thres = 0.02):
     img_boxes, rect_list, hierarchy  = find_rectangles(img)
-    print_hierarchy(hierarchy)
+    #print_hierarchy(hierarchy)
 
     if frame:
         framed_list=[]
@@ -230,11 +230,11 @@ def segment_img(img, frame = True, GDT_thres = 0.02):
 
     for table in tables:
         for b in table:
-            process_img[b.y - 2 : b.y + b.h + 4, b.x - 2 : b.x + b.w + 4][:] = 255
+            process_img[b.y - 5 : b.y + b.h + 10, b.x - 5 : b.x + b.w + 10][:] = 255
     
     for gdt in gdt_boxes:
         for g in gdt.values():
             for b in g:
-                process_img[b.y - 2 : b.y + b.h + 4, b.x - 2 : b.x + b.w + 4][:] = 255
+                process_img[b.y - 5 : b.y + b.h + 10, b.x - 5 : b.x + b.w + 10][:] = 255
     
     return img_boxes, process_img, frame, gdt_boxes, tables
