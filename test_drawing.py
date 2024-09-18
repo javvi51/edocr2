@@ -24,7 +24,7 @@ img_boxes, process_img, frame, gdt_boxes, tables  = tools.layer_segm.segment_img
 end_time = time.time()
 print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
-       
+
 #region ############ OCR Tables ###########################
 start_time = time.time()
 
@@ -38,7 +38,11 @@ print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.
 start_time = time.time()
 
 gdt_model = 'recognizer_gdts.h5'
-gdt_results, updated_gdt_boxes = tools.ocr_pipelines.ocr_gdt(img, gdt_boxes, alphabet_gdts, gdt_model)
+
+if gdt_boxes:
+    gdt_results, updated_gdt_boxes = tools.ocr_pipelines.ocr_gdt(img, gdt_boxes, alphabet_gdts, gdt_model)
+else:
+    gdt_results, updated_gdt_boxes = [], []
 
 end_time = time.time()
 print(f"\033[1;33mOCR in GD&T took {end_time - start_time:.6f} seconds to run.\033[0m")
@@ -48,11 +52,12 @@ print(f"\033[1;33mOCR in GD&T took {end_time - start_time:.6f} seconds to run.\0
 start_time = time.time()
 
 dimension_model = 'recognizer_dimensions_.h5'
+detector = None #'detector_14_25.keras'
 
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 
-dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, alphabet_dimensions, None, dimension_model, 20)
+dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, alphabet_dimensions, detector, dimension_model, 20)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
@@ -67,7 +72,3 @@ mask_img = tools.mask_results.mask_img(img, updated_gdt_boxes, updated_tables, d
 cv2.imshow('boxes', mask_img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
-
-
-
-
