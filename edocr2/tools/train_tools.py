@@ -1,68 +1,283 @@
-import random, time, os, math, cv2 
+import random, time, os, math, cv2
 import numpy as np
+from collections import Counter
 
-def get_text_generator(alphabet, string_length = (5, 10), lowercase=False):
+############ Synthetic Generation ###############################################
+
+def get_balanced_text_generator(alphabet, string_length=(5, 10), lowercase=False):
     '''
-    Generates a sentence.
+    Generates batches of sentences ensuring perfectly balanced symbol distribution.
     Args:
         alphabet: string of characters
+        batch_size: number of sentences per batch
+        string_length: tuple defining range of sentence length
         lowercase: convert alphabet to lowercase
-        max_string_length: maximum number of characters in the sentence
     Return:
-        sentence string
+        list of sentence strings
     '''
+    # Initialize a counter to track the number of times each character is used
+    symbol_counter = Counter({char: 0 for char in alphabet})
+    
     while True:
-        sentence = random.choices(alphabet, k=random.randint(string_length[0], string_length[1]))
+        # Calculate the total number of generated symbols
+        total_generated = sum(symbol_counter.values())
+
+        # Adjust probabilities to balance the frequency of each symbol
+        weights = {char: total_generated - count + 1 for char, count in symbol_counter.items()}
+        total_weight = sum(weights.values())
+        probabilities = [weights[char] / total_weight for char in alphabet]
+
+        # Sample a sentence based on the adjusted probabilities
+        sentence = random.choices(alphabet, weights=probabilities, k=random.randint(string_length[0], string_length[1]))
         sentence = "".join(sentence)
+
+        # Update the symbol counter
+        symbol_counter.update(sentence)
+
         if lowercase:
             sentence = sentence.lower()
+        
         yield sentence
 
 def get_backgrounds(height, width, samples):
-    def draw_random_lines_and_arcs(image):
-        """Draw random arcs, horizontal and vertical lines on the image.
-        
-        Args:
-        image: The image to draw on.
-        """
-        height, width, _ = image.shape
-        
-        # Number of lines and arcs to draw
-        num_lines = random.randint(1, 5)  # Adjust as needed
-        num_arcs = 0#random.randint(1, 3)   # Adjust as needed
-        
-        # Draw random horizontal and vertical lines
-        for _ in range(num_lines):
-            start_x = random.randint(0, width - 1)
-            start_y = random.randint(0, height - 1)
-            end_x = random.randint(0, width - 1)
-            end_y = random.randint(0, height - 1)
-            gray_value = random.randint(100, 255)  # Random grayscale color
-            color = (gray_value, gray_value, gray_value)
-            thickness = random.randint(1, 10)  # Random stroke size
-            cv2.line(image, (start_x, start_y), (end_x, end_y), color, thickness)
-        
-        # Draw random arcs
-        for _ in range(num_arcs):
-            center_x = random.randint(0, width - 1)
-            center_y = random.randint(0, height - 1)
-            axes = (random.randint(10, width // 2), random.randint(10, height // 2))
-            angle = random.randint(0, 360)
-            start_angle = random.randint(0, 30)
-            end_angle = start_angle + random.randint(30, 360 - start_angle)
-            gray_value = random.randint(100, 255)  # Random grayscale color
-            color = (gray_value, gray_value, gray_value)
-            thickness = random.randint(1, 10)  # Random stroke size
-            cv2.ellipse(image, (center_x, center_y), axes, angle, start_angle, end_angle, color, thickness)
-
-
-    backgrounds =[]
+    backgrounds = []
+    backg_path = os.path.join(os.getcwd(), 'edocr2/tools/backgrounds')
+    backg_files = os.listdir(backg_path)
     for _ in range(samples):
-        backg = np.zeros((height, width, 3), dtype="uint8")
-        draw_random_lines_and_arcs(backg)
+        backg_file = random.choice(backg_files)
+        img = cv2.imread(os.path.join(backg_path, backg_file))
+        y, x = random.randint(0, img.shape[0] - height), random.randint(0, img.shape[1] - width)
+        backg = img[y : y + height, x : x + width][:]
         backgrounds.append(backg)
 
     return backgrounds
+
+def filter_wrong_samples(generator, white_pixel_threshold=0.05):
+    """A generator wrapper that filters out samples with too many white pixels.
+    
+    Args:
+    generator: The original generator that produces image samples.
+    white_pixel_threshold: The maximum allowed ratio of white pixels.
+    
+    Yields:
+    Valid samples that meet the white pixel threshold criteria.
+    """
+    for image, text in generator:
+        # Convert image to grayscale to count white pixels
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Threshold to create a binary image (white pixels = 255, other = 0)
+        _, binary_image = cv2.threshold(gray_image, 127, 255, cv2.THRESH_BINARY)
+
+        # Calculate total pixels and the number of white pixels
+        total_pixels = binary_image.size
+        white_pixels = np.sum(binary_image == 255)
+        
+        # Calculate the percentage of white pixels
+        white_pixel_ratio = white_pixels / total_pixels
+        
+        # Yield the sample only if the white pixel ratio is within the acceptable threshold
+        if white_pixel_ratio >= white_pixel_threshold:
+            yield cv2.bitwise_not(image), text
+        '''else:
+            print(f"Skipping sample due to low white pixel ratio ({white_pixel_ratio:.2%})")'''
+
+def generate_drawing_imgs(image_gen_params, backgrounds):
+
+    def compact_bounding_box(box_group):
+        from edocr2.tools.ocr_pipelines import agglomerative_cluster
+        box_groups = []
+        for b in box_group:
+            for xy, _ in b:
+                box_groups.append(xy)
+                    
+        box_groups = agglomerative_cluster(box_groups, threshold_distance = 25)
+        
+        dummy_char = '1'
+        dummy_box_groups = []
+
+        for box in box_groups:
+            dummy_box_groups.append([(np.array(box).astype(np.int32), dummy_char)])
+
+        return dummy_box_groups
+
+    def choose_background_no_overlap(text_img, background_list):
+        """Choose a random background from the list that doesn't overlap with the white text.
+        
+        Args:
+        text_img: A binary image where the text is white (255) on black (0).
+        background_list: A list of background images.
+        
+        Returns:
+        The chosen background image that doesn't overlap with the white text.
+        """
+        def check_overlap(text_img, background_img):
+            """Check if there is an overlap between black pixels of the background and white pixels of the text.
+            
+            Args:
+            text_img: A binary image where the text is white (255) on black (0).
+            background_img: A grayscale or RGB background image.
+            
+            Returns:
+            bool: True if there is an overlap, False otherwise.
+            """
+            # Ensure both images are of the same size
+            if text_img.shape != background_img.shape[:2]:
+                raise ValueError("Text image and background image must have the same dimensions")
+            
+            # Convert background to grayscale if it's RGB
+            if len(background_img.shape) == 3:
+                background_gray = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+            else:
+                background_gray = background_img
+
+            # Identify where the text image has white pixels (text pixels)
+            text_mask = text_img == 0
+
+            # Identify where the background has black pixels (0 value)
+            background_black_mask = background_gray == 0
+            
+            # Check if any black background pixels overlap with the white text pixels
+            overlap = np.any(np.logical_and(text_mask, background_black_mask))
+
+            return overlap
+
+        # Try picking a background that does not overlap
+        for _ in range(len(background_list)*2):  # Limit the number of retries to avoid infinite loops
+            background_img = random.choice(background_list)
+            if not check_overlap(text_img, background_img):
+                return background_img
+
+    def apply_text_on_background(text_img, text_binary, background_img):
+        """Apply the text image over the background, assuming no overlap."""
+        # Create a mask where text_binary is white (255), ndicating text
+        text_mask = text_binary == 0
+        
+        # Create a copy of background_img to avoid modifying the original image
+        result = background_img.copy()
+
+        inverted_text_img = cv2.bitwise_not(text_img)
+        result[text_mask] = inverted_text_img[text_mask]
+
+        return result
+
+    from edocr2.keras_ocr import data_generation
+    """Generate images with text on a background, ensuring no overlap."""
+    while True:
+        # Create image generators for training and validation
+        image_generator_train = data_generation.get_image_generator(**image_gen_params)
+        text_image, lines = next(image_generator_train)
+
+        # Convert text image to binary
+        _, binary_text_img = cv2.threshold(cv2.cvtColor(text_image, cv2.COLOR_BGR2GRAY), 1, 255, cv2.THRESH_BINARY_INV)
+
+        # Choose a background that doesn't overlap with the text
+        background = choose_background_no_overlap(binary_text_img, backgrounds)
+        if background is not None:
+            # Apply the text image on the background
+            image = apply_text_on_background(text_image, binary_text_img, background)
+            #bounding_box = compact_bounding_box(lines)
+            yield image, lines#, bounding_box
+
+def save_recog_samples(alphabet, fonts, samples, recognizer, save_path = './recog_samples'):
+    """Generate and save a few samples along with their labels.
+    
+    Args:
+    recognizer: The recognizer model (trained or not).
+    image_generator: The generator to produce the images.
+    sample_count: Number of samples to generate.
+    save_path: Path where the samples will be saved.
+    """
+    from edocr2.keras_ocr import data_generation
+
+    # Create directory if it doesn't exist
+    os.makedirs(save_path, exist_ok=True)
+    # Generate and save the samples
+    for i in range(samples):
+
+        text_generator = get_balanced_text_generator(alphabet, (5, 10))
+
+        image_gen_params = {
+        'height': 256,
+        'width': 256,
+        'text_generator': text_generator,
+        'font_groups': {alphabet: fonts},  # Use all fonts
+        'font_size': (20, 40),
+        'margin': 10,
+        }
+
+        # Create image generators for training and validation
+        image_generators_train = data_generation.get_image_generator(**image_gen_params)
+
+        # Helper function to convert image generators to recognizer input
+        def convert_generators(image_generators):
+            return data_generation.convert_image_generator_to_recognizer_input(
+                    image_generator=image_generators,
+                    max_string_length=min(recognizer.training_model.input_shape[1][1], 10),
+                    target_width=recognizer.model.input_shape[2],
+                    target_height=recognizer.model.input_shape[1],
+                    margin=1) 
+
+        # Convert training and validation image generators
+        recog_img_gen_train = convert_generators(image_generators_train)
+        filter_gen = filter_wrong_samples(recog_img_gen_train, white_pixel_threshold=0.05)
+        image, text = next(filter_gen)
+        
+        # Save the image
+        image_filename = os.path.join(save_path, f'{i + 1}.png')
+        cv2.imwrite(image_filename, image)
+        
+        # Save the label in a text file
+        label_filename = os.path.join(save_path, f'{i + 1}.txt')
+        with open(label_filename, 'w') as label_file:
+            label_file.write(text)
+
+def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'):
+    
+    os.makedirs(save_path, exist_ok=True)
+
+    text_generator = get_balanced_text_generator(alphabet, (5, 10))
+    height, width = 640, 640
+    backgrounds = get_backgrounds(height, width, samples)
+
+    image_gen_params = {
+    'height': height,
+    'width': width,
+    'text_generator': text_generator,
+    'font_groups': {alphabet: fonts},  # Use all fonts
+    'font_size': (20, 80),
+    'margin': 25,
+    'rotationZ': (-90, 120)
+    }
+
+    image_gen = generate_drawing_imgs(image_gen_params, backgrounds)
+    from edocr2.tools.mask_results import mask_box
+    for i in range(samples):
+        image, lines = next(image_gen)
+
+        # Save the image
+        image_filename = os.path.join(save_path, f'img_{i + 1}.png')
+        cv2.imwrite(image_filename, image)
+
+        label_filename = os.path.join(save_path, f'gt_img_{i + 1}.txt')
+
+        label = ''
+        
+        for box in lines:
+            for xy, _ in box:
+                for vertex in xy:
+                    label += str(int(vertex[0])) + ', ' + str(int(vertex[1])) + ', '
+            label = label[:-2] + '\n'
+            #image = mask_box(image, xy, (93, 206, 175))
+
+        #cv2.imshow('Image with Oriented Bounding Box', image)
+        #cv2.waitKey(0)  # Wait for a key press to close the image
+        #cv2.destroyAllWindows()
+
+        with open(label_filename, 'w') as txt_file:
+            txt_file.write(label)
+
+############ Synthetic Training ################################################
 
 def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, batch_size = 256, epochs = 10, string_length = (5, 10), basepath = os.getcwd(), val_split = 0.2):
     '''Starts the training of the recognizer on generated data.
@@ -80,14 +295,14 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, b
     basepath = os.path.join(basepath,
     f'recognizer_{time.gmtime(time.time()).tm_hour}'+f'_{time.gmtime(time.time()).tm_min}')
 
-    text_generator = get_text_generator(alphabet, string_length)
+    text_generator = get_balanced_text_generator(alphabet, string_length)
 
     image_gen_params = {
-    'height': 640,
-    'width': 640,
+    'height': 256,
+    'width': 256,
     'text_generator': text_generator,
     'font_groups': {alphabet: fonts},  # Use all fonts
-    'font_size': (20, 120),
+    'font_size': (20, 40),
     'margin': 10
     }
 
@@ -99,8 +314,8 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, b
     if pretrained:
         recognizer.model.load_weights(pretrained)
     recognizer.compile()
-    for layer in recognizer.backbone.layers:
-        layer.trainable = False
+    #for layer in recognizer.backbone.layers:
+     #   layer.trainable = False
 
     # Helper function to convert image generators to recognizer input
     def convert_generators(image_generators):
@@ -130,6 +345,7 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, b
         validation_data=recognition_val_generator,
         validation_steps=math.ceil(val_split * samples / batch_size),
     )
+    return basepath
 
 def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, batch_size = 8, epochs = 10, string_length = (2, 10), basepath = os.getcwd(), val_split = 0.2):
     import tensorflow as tf
@@ -137,7 +353,7 @@ def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, bat
     basepath = os.path.join(basepath,
     f'detector_{time.gmtime(time.time()).tm_hour}'+f'_{time.gmtime(time.time()).tm_min}')
 
-    text_generator = get_text_generator(alphabet, string_length)
+    text_generator = get_balanced_text_generator(alphabet, string_length)
     height, width = 640, 640
     backgrounds = get_backgrounds(height, width, samples)
 
@@ -145,16 +361,15 @@ def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, bat
     'height': height,
     'width': width,
     'text_generator': text_generator,
-    'backgrounds': backgrounds,
     'font_groups': {alphabet: fonts},  # Use all fonts
-    'font_size': (20, 120),
-    'margin': 20,
-    'rotationZ': (-30, 30)
+    'font_size': (20, 80),
+    'margin': 25,
+    'rotationZ': (-90, 120)
     }
 
     # Create image generators for training and validation
-    image_generator_train = keras_ocr.data_generation.get_image_generator(**image_gen_params)
-    image_generator_val = keras_ocr.data_generation.get_image_generator(**image_gen_params)
+    image_generator_train  = generate_drawing_imgs(image_gen_params, backgrounds)
+    image_generator_val  = generate_drawing_imgs(image_gen_params, backgrounds)
 
     detector = keras_ocr.detection.Detector(weights='clovaai_general')
     if pretrained:
@@ -176,133 +391,59 @@ def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, bat
         validation_steps=math.ceil(val_split * samples / batch_size),
         batch_size=batch_size
     )
+    return basepath
 
-def filter_wrong_samples(generator, white_pixel_threshold=0.05):
-    """A generator wrapper that filters out samples with too many white pixels.
+############ Standard Training ################################################
+def train_detector(data_path, batch_size = 8, epochs = 10, val_split = 0.2, pretrained = None):
+    import tensorflow as tf
+    from sklearn.model_selection import train_test_split
+    from edocr2 import keras_ocr
+    import os
+    import time
+    import math
+
+    # Set basepath for saving logs and model
+    basepath = os.path.join(basepath, f'detector_{time.gmtime(time.time()).tm_hour}_{time.gmtime(time.time()).tm_min}')
+
+############ Testing ##########################################################
+def test_recog(test_path, recognizer):
+
+    # To track ground truth and predictions for word-level accuracy
+    total_chars = 0  # Total number of characters in all labels
+    correct_chars = 0  # Total number of correctly predicted characters
+
+    samples = len(os.listdir(test_path)) / 2
     
-    Args:
-    generator: The original generator that produces image samples.
-    white_pixel_threshold: The maximum allowed ratio of white pixels.
+    for i in range(1, int(samples) + 1):
+        img = cv2.imread(os.path.join(test_path, f"{i}.png"))
+        with open(os.path.join(test_path, f"{i}.txt"), 'r') as txt_file:
+            label = txt_file.read().strip()
+        pred = recognizer.recognize(image = img)
+        print(f'ground truth: {label} | prediction: {pred}')
+
+        correct_in_sample = sum(1 for x, y in zip(label, pred) if x == y)
+        correct_chars += correct_in_sample
+        total_chars += len(label)
+
+        sample_char_accuracy = (correct_in_sample / len(label)) * 100 if len(label) > 0 else 0
+        print(f"Sample character accuracy: {sample_char_accuracy:.2f}%")
+
+    # Calculate and print overall character-level accuracy
+    overall_char_accuracy = (correct_chars / total_chars) * 100 if total_chars > 0 else 0
+    print(f"\nTotal Samples: {samples}")
+    print(f"Total characters: {total_chars}")
+    print(f"Correctly predicted characters: {correct_chars}")
+    print(f"Overall character-level accuracy: {overall_char_accuracy:.2f}%")
+
+def test_detect(test_path, detector):
+    samples = len(os.listdir(test_path)) / 2
     
-    Yields:
-    Valid samples that meet the white pixel threshold criteria.
-    """
-    for image, text in generator:
-        # Convert image to grayscale to count white pixels
-        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # Threshold to create a binary image (white pixels = 255, other = 0)
-        _, binary_image = cv2.threshold(gray_image, 127, 255, cv2.THRESH_BINARY)
+    for i in range(1, int(samples) + 1):
+        img = cv2.imread(os.path.join(test_path, f"img_{i}.png"))
 
-        # Calculate total pixels and the number of white pixels
-        total_pixels = binary_image.size
-        white_pixels = np.sum(binary_image == 255)
-        
-        # Calculate the percentage of white pixels
-        white_pixel_ratio = white_pixels / total_pixels
-        
-        # Yield the sample only if the white pixel ratio is within the acceptable threshold
-        if white_pixel_ratio >= white_pixel_threshold:
-            yield image, text
-        '''else:
-            print(f"Skipping sample due to low white pixel ratio ({white_pixel_ratio:.2%})")'''
 
-def save_recog_samples(alphabet, fonts, sample_count, recognizer, save_path = './recog_samples'):
-    """Generate and save a few samples along with their labels.
-    
-    Args:
-    recognizer: The recognizer model (trained or not).
-    image_generator: The generator to produce the images.
-    sample_count: Number of samples to generate.
-    save_path: Path where the samples will be saved.
-    """
-    from edocr2.keras_ocr import data_generation
+#TODO: test_detect
 
-    # Create directory if it doesn't exist
-    os.makedirs(save_path, exist_ok=True)
-    label_filename = os.path.join(save_path, f'labels.txt')
-    # Generate and save the samples
-    for i in range(sample_count):
+#TODO: remove paint from backgrounds
 
-        text_generator = get_text_generator(alphabet, (5, 10))
-
-        image_gen_params = {
-        'height': 640,
-        'width': 640,
-        'text_generator': text_generator,
-        'font_groups': {alphabet: fonts},  # Use all fonts
-        'font_size': (20, 120),
-        'margin': 10,
-        }
-
-        # Create image generators for training and validation
-        image_generators_train = data_generation.get_image_generator(**image_gen_params)
-
-        # Helper function to convert image generators to recognizer input
-        def convert_generators(image_generators):
-            return data_generation.convert_image_generator_to_recognizer_input(
-                    image_generator=image_generators,
-                    max_string_length=min(recognizer.training_model.input_shape[1][1], 10),
-                    target_width=recognizer.model.input_shape[2],
-                    target_height=recognizer.model.input_shape[1],
-                    margin=1) 
-
-        # Convert training and validation image generators
-        recog_img_gen_train = convert_generators(image_generators_train)
-        filter_gen = filter_wrong_samples(recog_img_gen_train, white_pixel_threshold=0.05)
-        image, text = next(filter_gen)
-        
-        # Save the image
-        image_filename = os.path.join(save_path, f'sample_{i + 1}.png')
-        cv2.imwrite(image_filename, image)
-        
-        # Save the label in a text file
-        
-        with open(label_filename, 'a') as label_file:
-            label_file.write(text + '\n')
-
-def save_detect_samples(alphabet, fonts, sample_count, save_path = './detect_samples'):
-    from edocr2.keras_ocr import data_generation
-    os.makedirs(save_path, exist_ok=True)
-    label_filename = os.path.join(save_path, f'labels.txt')
-
-    text_generator = get_text_generator(alphabet, (5, 10))
-    height, width = 640, 640
-    backgrounds = get_backgrounds(height, width, sample_count)
-
-    image_gen_params = {
-    'height': height,
-    'width': width,
-    'text_generator': text_generator,
-    'backgrounds': backgrounds,
-    'font_groups': {alphabet: fonts},  # Use all fonts
-    'font_size': (20, 120),
-    'margin': 20,
-    'rotationZ': (-90, 90)
-    }
-
-    for i in range(sample_count):
-        # Create image generators for training and validation
-        image_generator_train = data_generation.get_image_generator(**image_gen_params)
-        image, lines = next(image_generator_train)
-        # Save the image
-        image_filename = os.path.join(save_path, f'sample_{i + 1}.png')
-        cv2.imwrite(image_filename, image)
-        
-        # Save the label in a text file
-        with open(label_filename, 'a') as label_file:
-            for l in lines[0]:
-                array = l[0]
-                label_file.write('\n'.join(' '.join(map(str, row)) for row in array) + '\n')
-            label_file.write('\n\n')
-
-def train_recog():
-    pass
-
-def train_detector():
-    pass
-
-#TODO: Drawing patches on background generator, fix font size
-#TODO: train_recog function on given dataset (+get_alfa modificator) Tolerances???
 #TODO: train_detect function on given dataset
-#TODO: get standard fonts and filter them

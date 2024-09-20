@@ -536,9 +536,13 @@ class Recognizer:
         return [predictions[start:end] for start, end in start_end]
 
     def compile(self, *args, **kwargs):
+        def custom_loss(_, y_pred):
+            return y_pred
         """Compile the training model."""
         if "optimizer" not in kwargs:
             kwargs["optimizer"] = "RMSprop"
         if "loss" not in kwargs:
-            kwargs["loss"] = lambda _, y_pred: y_pred
+            kwargs["loss"] = custom_loss
         self.training_model.compile(*args, **kwargs)
+
+    

@@ -1,4 +1,4 @@
-import cv2, math
+import cv2, math, os
 import numpy as np
 
 ###################### Tables Pipeline #################################
@@ -114,11 +114,13 @@ def sort_gdt_boxes(boxes, y_thres = 3):
 def recognize_gdt(img, block, recognizer):
     roi = img[block[0].y + 2:block[0].y + block[0].h - 4, block[0].x + 2:block[0].x + block[0].w - 4]
     pred = recognizer.recognize(image = roi)
+    #cv2.imwrite(f"{0}.png", roi)
 
     for i in range(1, len(block)):
         new_line = block[i].y - block[i - 1].y > 5
         roi = img[block[i].y:block[i].y + block[i].h, block[i].x:block[i].x + block[i].w]
         p = recognizer.recognize(image = roi)
+        #cv2.imwrite(f"{i}.png", roi)
         if new_line:
             pred += '\n' + p
         else:
@@ -461,7 +463,7 @@ def clean_h_lines(img_croped):
         cv2.drawContours(img_croped, [c], -1, (255,255,255), 2)
     return img_croped, thresh
 
-def ocr_dimensions(img, alphabet = None, detector_path = None, recognizer_path = None, cluster_thres = 20, patches = (5, 4)):
+def ocr_dimensions(img, alphabet = None, detector_path = None, recognizer_path = None, cluster_thres = 20, patches = (5, 4), backg_save = False):
     from edocr2.keras_ocr.recognition import Recognizer
     from edocr2.keras_ocr.detection import Detector
 
@@ -477,5 +479,23 @@ def ocr_dimensions(img, alphabet = None, detector_path = None, recognizer_path =
     
     pipeline = Pipeline(recognizer=recognizer, detector=detector)
     results = pipeline.ocr_img_patches(img, patches, 0.05, cluster_thres)
+
+    #For patches background generation in synthetic data training
+    if backg_save:
+        backg_path = os.path.join(os.getcwd(), 'edocr2/tools/backgrounds')
+        os.makedirs(backg_path, exist_ok=True)
+        i = 0
+        for root_dir, cur_dir, files in os.walk(backg_path):
+            i += len(files)
+
+        process_img = img.copy()
+        for dim in results:
+            box = dim[1]
+            pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])])
+            cv2.fillPoly(process_img, [pts], (255, 255, 255))
+        # Save the image
+        image_filename = os.path.join(backg_path , f'backg_{i + 1}.png')
+        cv2.imwrite(image_filename, process_img)
+        
 
     return results
