@@ -84,23 +84,6 @@ def filter_wrong_samples(generator, white_pixel_threshold=0.05):
 
 def generate_drawing_imgs(image_gen_params, backgrounds):
 
-    def compact_bounding_box(box_group):
-        from edocr2.tools.ocr_pipelines import agglomerative_cluster
-        box_groups = []
-        for b in box_group:
-            for xy, _ in b:
-                box_groups.append(xy)
-                    
-        box_groups = agglomerative_cluster(box_groups, threshold_distance = 25)
-        
-        dummy_char = '1'
-        dummy_box_groups = []
-
-        for box in box_groups:
-            dummy_box_groups.append([(np.array(box).astype(np.int32), dummy_char)])
-
-        return dummy_box_groups
-
     def choose_background_no_overlap(text_img, background_list):
         """Choose a random background from the list that doesn't overlap with the white text.
         
@@ -161,6 +144,23 @@ def generate_drawing_imgs(image_gen_params, backgrounds):
 
         return result
 
+    def compact_bounding_box(box_group):
+        from edocr2.tools.ocr_pipelines import group_polygons_by_proximity
+        box_groups = []
+        for b in box_group:
+            for xy, _ in b:
+                box_groups.append(xy)
+                    
+        box_groups = group_polygons_by_proximity(box_groups, eps = 10)
+        
+        dummy_char = '1'
+        dummy_box_groups = []
+
+        for box in box_groups:
+            dummy_box_groups.append([(np.array(box).astype(np.int32), dummy_char)])
+
+        return dummy_box_groups
+    
     from edocr2.keras_ocr import data_generation
     """Generate images with text on a background, ensuring no overlap."""
     while True:
@@ -176,8 +176,8 @@ def generate_drawing_imgs(image_gen_params, backgrounds):
         if background is not None:
             # Apply the text image on the background
             image = apply_text_on_background(text_image, binary_text_img, background)
-            #bounding_box = compact_bounding_box(lines)
-            yield image, lines#, bounding_box
+            lines = compact_bounding_box(lines)
+            yield image, lines
 
 def save_recog_samples(alphabet, fonts, samples, recognizer, save_path = './recog_samples'):
     """Generate and save a few samples along with their labels.
@@ -251,7 +251,6 @@ def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'
     }
 
     image_gen = generate_drawing_imgs(image_gen_params, backgrounds)
-    from edocr2.tools.mask_results import mask_box
     for i in range(samples):
         image, lines = next(image_gen)
 
@@ -260,22 +259,22 @@ def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'
         cv2.imwrite(image_filename, image)
 
         label_filename = os.path.join(save_path, f'gt_img_{i + 1}.txt')
-
         label = ''
-        
+
         for box in lines:
             for xy, _ in box:
                 for vertex in xy:
                     label += str(int(vertex[0])) + ', ' + str(int(vertex[1])) + ', '
-            label = label[:-2] + '\n'
-            #image = mask_box(image, xy, (93, 206, 175))
+                #pts=np.array([(xy[0]),(xy[1]),(xy[2]),(xy[3])], dtype=np.int32).reshape((-1, 1, 2))
+                #cv2.polylines(image, [pts], isClosed=True, color=(255, 0, 0), thickness=2)
+                label += '### \n'
+
+        with open(label_filename, 'w') as txt_file:
+            txt_file.write(label)
 
         #cv2.imshow('Image with Oriented Bounding Box', image)
         #cv2.waitKey(0)  # Wait for a key press to close the image
         #cv2.destroyAllWindows()
-
-        with open(label_filename, 'w') as txt_file:
-            txt_file.write(label)
 
 ############ Synthetic Training ################################################
 
@@ -435,12 +434,80 @@ def test_recog(test_path, recognizer):
     print(f"Correctly predicted characters: {correct_chars}")
     print(f"Overall character-level accuracy: {overall_char_accuracy:.2f}%")
 
-def test_detect(test_path, detector):
+def test_detect(test_path, detector, show_img = False):
+
     samples = len(os.listdir(test_path)) / 2
+    iou_scores =[]
     
     for i in range(1, int(samples) + 1):
         img = cv2.imread(os.path.join(test_path, f"img_{i}.png"))
+        gt = []
 
+        with open(os.path.join(test_path, f"gt_img_{i}.txt"), 'r') as txt_file:
+            for line in txt_file:
+                # Split the line by commas and strip any whitespace
+                parts = line.strip().split(',')
+                
+                # Extract the coordinates (first 8 values) and the character (last value)
+                coords = np.array([(int(parts[0]), int(parts[1])),
+                                (int(parts[2]), int(parts[3])),
+                                (int(parts[4]), int(parts[5])),
+                                (int(parts[6]), int(parts[7]))])
+                
+                # Append a tuple of (coords, char) to the result list
+                gt.append(coords)
+
+        pred = detector.detect([img])
+
+         # Calculate IoU for each predicted box with the closest ground truth box
+        for pred_box in pred[0]:
+            best_iou = 0.0
+            for gt_box in gt:
+                iou = calculate_iou(pred_box, gt_box)
+                best_iou = max(best_iou, iou)  # Track the best IoU score for this prediction
+
+            iou_scores.append(best_iou)
+            
+        if show_img:
+            for box in pred:
+                for xy in box:
+                    pts=np.array([(xy[0]),(xy[1]),(xy[2]),(xy[3])], dtype=np.int32).reshape((-1, 1, 2))
+                    cv2.polylines(img, [pts], isClosed=True, color=(255, 0, 0), thickness=2)
+
+            for xy in gt:
+                pts=np.array([(xy[0]),(xy[1]),(xy[2]),(xy[3])], dtype=np.int32)
+                cv2.polylines(img, [pts], isClosed=True, color=(0, 255, 0), thickness=2)   
+
+            cv2.imshow('Image with Oriented Bounding Box', img)
+            cv2.waitKey(0)  # Wait for a key press to close the image
+            cv2.destroyAllWindows()
+    
+    # Print the average IoU score
+    if iou_scores:
+        print(f"Average IoU: {np.mean(iou_scores)}")
+    else:
+        print("No predictions found.")
+
+def calculate_iou(predicted_polygon, ground_truth_polygon):
+    """
+    Calculate IoU (Intersection over Union) between two polygons.
+    """
+    from shapely.geometry import Polygon
+    pred_poly = Polygon(predicted_polygon)
+    gt_poly = Polygon(ground_truth_polygon)
+
+    if not pred_poly.is_valid or not gt_poly.is_valid:
+        return 0.0
+
+    # Calculate intersection and union areas
+    intersection_area = pred_poly.intersection(gt_poly).area
+    union_area = pred_poly.union(gt_poly).area
+
+    if union_area == 0:
+        return 0.0
+
+    iou = intersection_area / union_area
+    return iou
 
 #TODO: test_detect
 

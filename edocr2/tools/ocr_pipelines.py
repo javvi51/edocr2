@@ -186,7 +186,7 @@ class Pipeline:
         if detection_kwargs is None:
             detection_kwargs = {}
         
-        new_size = (img.shape[1]* scale, img.shape[0]* scale)
+        new_size = (int(img.shape[1]* scale), int(img.shape[0]* scale))
         img = cv2.resize(img, new_size, interpolation=cv2.INTER_LINEAR)
         box_groups = self.detector.detect(images=[img], **detection_kwargs)
         box_groups = [
@@ -262,89 +262,83 @@ class Pipeline:
                             xy = xy + offset
                             box_groups.append(xy)
                 
-        box_groups = agglomerative_cluster(box_groups, threshold_distance = cluster_t)
+        box_groups = group_polygons_by_proximity(box_groups, eps = cluster_t)
         new_group = [box for box in box_groups]
         snippets = self.recognize_dimensions(np.int32(new_group), np.array(img))
         return snippets
 
-def agglomerative_cluster(box_groups, threshold_distance = 10.0):
-    '''For a list containing np arrays of bounding boxes, it returns a new list with merged boundng boxes from the previous list,
-    the criteria to merge polygons is the distance speficied with a threshold
-    Args:
-        box_groups: list of bounding boxes
-        threshold_distance: Float value that stablish the offset to merge polygons
-    returns: new_group_: new list of bounding boxes'''
+def group_polygons_by_proximity(polygons, eps=50):
+        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.ops import unary_union
 
-    from shapely import affinity
-    from shapely.geometry import Polygon, MultiPoint
-
-    def get_scale_factors(poly, t):
-        '''Calculates the scale factor needed to get a box with the size of the box plus an offset
-        Args:
-            poly: a Polygon instance from shapely
-            t: offset
-        Returns: xfact: scale factor'''
-
-        C = list(poly.centroid.coords)[0] # Get the centroid of the polygon
-        A = poly.exterior.coords[0] # Get the first vertex of the polygon
-        D = poly.exterior.coords[1] # Get the second vertex of the polygon
-        #let's do trigonometry! yei!
-        a = math.sqrt((A[0] - C[0]) ** 2 + (A[1] - C[1]) ** 2) #Euclidean distance between the first vertex A and the centroid C
-        if A[0] == D[0]:
-            b = t #effective offset for scaling
-        else: #if not vertically aligned
-            alfa = math.atan((C[1] - A[1]) / (C[0] - A[0])) # Angle between centroid C and vertex A
-            beta= math.atan((D[1] - A[1]) / (D[0] - A[0])) # Angle between vertex D and A
-            phi = math.atan((D[1] - C[1]) / (D[0] - C[0])) # Angle between centroid C and vertex D
-
-            if alfa + math.pi - phi > math.pi / 2: 
-                b = t / math.cos(beta - alfa) 
-            else:
-                b = t / math.sin(beta - alfa)
-
-        xfact = abs((a + b) / a) # ratio
-        return xfact
-    
-    def merge_poly(poly1, poly2):
-        '''Given two Polygons, get the minimum rotated bounding rectangle
-        Args:
-            poly1: Polygon
-            poly2:Polygon
-        returns: poly_merged: Merged Polygon'''
-        a = list(poly1.exterior.coords)[0:4]
-        b = list(poly2.exterior.coords)[0:4]
-        pts = np.concatenate((a, b), axis = 0)
-        poly_merged = MultiPoint(pts).minimum_rotated_rectangle
-        return poly_merged
-
-    new_group = []
-    box_groups_ = []
-    for box in box_groups:
-        box_groups_.append({'poly': Polygon(box), 'c': 0})
-    while len(box_groups_):
-        remove_list = []
-        box1 = box_groups_[0] # The chosen box
-        poly1_ = box1.get('poly') # Original polygon size
-        xfact = get_scale_factors(poly1_, threshold_distance)
-        poly1 = affinity.scale(poly1_, xfact = xfact, yfact = xfact) # Scaled polygon
-        for box2 in box_groups_[1:]: # Iterate over the rest
-            poly2=box2.get('poly') 
+        def polygon_intersects_or_close(p1, p2, eps):
+            
+            """
+            Check if two polygons either intersect or are within the distance threshold `eps`.
+            """
+            # Create Polygon objects from the arrays
+            poly1 = Polygon(p1)
+            poly2 = Polygon(p2)
+            
+            # Check if the polygons intersect
             if poly1.intersects(poly2):
-                poly_merged=merge_poly(poly1_, poly2) # On intersection with scaled polygon, merge originals
-                box_groups_.append({'poly': poly_merged, 'c': box1.get('c') + box2.get('c') + 1}) # Save merged polygon
-                remove_list.append(box1) # Remove from list
-                remove_list.append(box2) 
-                break
-        if box1 not in remove_list:
-            new_group.append(box1) # Save the aisled polygon
-            remove_list.append(box1) # Remove from list if no intersection
-        box_groups_ = [b for b in box_groups_ if b not in remove_list] # Update list 
-    new_group_ = []
-    # Converting box_group to coordinates
-    for box in new_group:
-        poly = box.get('poly')
-        new_group_.append(poly.exterior.coords[0:4])
-    return new_group_
+                return True
+            
+            # If not, check the minimum distance between their boundaries
+            return poly1.distance(poly2) <= eps
+
+        n = len(polygons)
+        parent = list(range(n))  # Union-find structure to track connected components
+        
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+        
+        def union(x, y):
+            rootX = find(x)
+            rootY = find(y)
+            if rootX != rootY:
+                parent[rootX] = rootY
+        
+        # Compare all polygon pairs
+        for i in range(n):
+            for j in range(i + 1, n):
+                if polygon_intersects_or_close(polygons[i], polygons[j], eps):
+                    union(i, j)
+        
+        # Group polygons by connected components and merge them
+        grouped_polygons = {}
+        for i in range(n):
+            root = find(i)
+            if root not in grouped_polygons:
+                grouped_polygons[root] = []
+            grouped_polygons[root].append(polygons[i])
+        
+        # Now merge the polygons in each group
+        merged_polygons = []
+        for group in grouped_polygons.values():
+            # Collect all points from the polygons in this group
+            all_points = []
+            for polygon in group:
+                all_points.extend(polygon)
+            
+            # Use Shapely to create a merged polygon
+            merged_polygon = unary_union([Polygon(p) for p in group])
+            
+            # Convert to coordinates for OpenCV to find the min-area bounding box
+            if isinstance(merged_polygon, MultiPolygon):
+                merged_polygon = unary_union(merged_polygon)
+            if merged_polygon.is_empty:
+                continue
+
+            # Find the minimum rotated bounding box for the merged polygon
+            min_rotated_box = merged_polygon.minimum_rotated_rectangle.exterior.coords[0:4]
+            
+            # Add the resulting rotated box to the list
+            merged_polygons.append(min_rotated_box)
+        
+        return merged_polygons
 
 def check_tolerances(img):
     img_arr = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) #Convert img to grayscale

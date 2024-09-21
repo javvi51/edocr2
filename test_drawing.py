@@ -1,7 +1,7 @@
 import cv2, string, time
 from edocr2 import tools
            
-file_path = 'tests/test_samples/halter.jpg'
+file_path = 'tests/test_samples/4132864-.jpg'
 img = cv2.imread(file_path)
 #img = convert_from_path(file_path)
 #img = np.array(img[0])
@@ -12,7 +12,7 @@ GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
 FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
 Extra = '(),.+-±:/°"⌀'
 
-alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
+alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols #+ FCF_symbols
 alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
 #endregion
 
@@ -57,7 +57,7 @@ detector = None #'detector_15_37.keras'
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 
-dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, alphabet_dimensions, detector, dimension_model, 20, backg_save=False)
+dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, alphabet_dimensions, detector, dimension_model, cluster_thres=15, backg_save=False)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
