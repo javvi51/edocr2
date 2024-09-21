@@ -19,7 +19,7 @@ for i in os.listdir('edocr2/tools/gdt_fonts'):
 #region ############## Detector ##############################
 
 ########## Training Detector ###############################
-detect_basepath = train_tools.train_synth_detector(alphabet_dimensions, gdt_fonts, samples = 100, epochs =5, batch_size=8)
+detect_basepath = train_tools.train_synth_detector(alphabet_dimensions, gdt_fonts, samples = 100, epochs =5, batch_size=8, basepath = 'edocr2/models')
 
 
 ######### Testing Detector #################################
@@ -35,7 +35,7 @@ train_tools.test_detect('detect_samples', detector)'''
 #region ############## Recognizer ############################
 
 '''########## Training Recognizer #############################
-recog_basepath = train_tools.train_synth_recognizer(alphabet_gdts, gdt_fonts, samples = 35000, epochs = 5, batch_size=256)
+recog_basepath = train_tools.train_synth_recognizer(alphabet_gdts, gdt_fonts, samples = 35000, epochs = 5, batch_size=256, basepath = 'edocr2/models')
 
 ########## Testing Recognizer ##############################
 

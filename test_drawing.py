@@ -37,7 +37,7 @@ print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.
 #region ############ OCR GD&T #############################
 start_time = time.time()
 
-gdt_model = 'recognizer_12_21.keras'
+gdt_model = 'edocr2/models/recognizer_gdts.h5'
 
 if gdt_boxes:
     gdt_results, updated_gdt_boxes = tools.ocr_pipelines.ocr_gdt(img, gdt_boxes, alphabet_gdts, gdt_model)
@@ -51,8 +51,8 @@ print(f"\033[1;33mOCR in GD&T took {end_time - start_time:.6f} seconds to run.\0
 #region ############ OCR Dimensions #######################
 start_time = time.time()
 
-dimension_model = 'recognizer_dimensions_.h5'
-detector = 'detector_15_37.keras'
+dimension_model = 'edocr2/models/recognizer_dimensions_.h5'
+detector = None #'detector_15_37.keras'
 
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
