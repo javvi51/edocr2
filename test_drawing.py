@@ -6,14 +6,14 @@ img = cv2.imread(file_path)
 #img = convert_from_path(file_path)
 #img = np.array(img[0])
 
-
 #region ############# Alphabet definition #################
 GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
 FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
 Extra = '(),.+-±:/°"⌀'
 
-alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols #+ FCF_symbols
+alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
 alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
+#alphabet_dimensions = string.digits + string.ascii_lowercase + string.ascii_uppercase + Extra
 #endregion
 
 #region ############ Segmentation Task ###################
@@ -37,7 +37,7 @@ print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.
 #region ############ OCR GD&T #############################
 start_time = time.time()
 
-gdt_model = 'edocr2/models/recognizer_gdts.h5'
+gdt_model = 'edocr2/models/recognizer_10_41.keras'
 
 if gdt_boxes:
     gdt_results, updated_gdt_boxes = tools.ocr_pipelines.ocr_gdt(img, gdt_boxes, alphabet_gdts, gdt_model)
@@ -51,7 +51,7 @@ print(f"\033[1;33mOCR in GD&T took {end_time - start_time:.6f} seconds to run.\0
 #region ############ OCR Dimensions #######################
 start_time = time.time()
 
-dimension_model = 'edocr2/models/recognizer_dimensions_.h5'
+dimension_model = 'edocr2/models/recognizer_13_44.keras'
 detector = None #'detector_15_37.keras'
 
 if frame:
@@ -63,8 +63,8 @@ end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
-############ Masking Images #######################
-mask_img = tools.mask_results.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame)
+############ Output #######################
+mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame)
 
 ############ Communicating with LLM ###############
 

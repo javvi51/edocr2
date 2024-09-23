@@ -44,3 +44,13 @@ def mask_img(img, gdt_boxes, tables, dimensions, frame):
         mask_img = mask_box(mask_img, pts, (93, 206, 175))
    
     return mask_img
+
+def save_raw_output(table_results = None, gdt_results = None, dimension_results = None):
+    if table_results:
+        pass #Save table results
+    if gdt_results:
+        pass #Save gdt results
+    if dimension_results:
+        pass #Save dimension results
+
+

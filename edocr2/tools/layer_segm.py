@@ -83,7 +83,7 @@ def print_hierarchy(rectangles, level=0):
         print("  " * level + f"{rect.name}")
         print_hierarchy(rect.children, level + 1)
 
-def find_rectangles(img):
+def find_rectangles(img, binary_thres = 127):
     '''Returns a list with rectangles from an image
     Args: img: the image (mechanical engineering drawing)
     returns: 
@@ -91,7 +91,7 @@ def find_rectangles(img):
         img_boxes: image with the contourns of the boxes'''
     # Convert img to grayscale and threshold to binary image
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    _, thresh = cv2.threshold(gray, binary_thres, 255, cv2.THRESH_BINARY_INV)
 
     # Find contours
     contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -211,8 +211,8 @@ def cluster_criteria(clusters, GDT_thres):
 
     return gdt, tab
 
-def segment_img(img, frame = True, GDT_thres = 0.02):
-    img_boxes, rect_list, hierarchy  = find_rectangles(img)
+def segment_img(img, frame = True, GDT_thres = 0.02, binary_thres = 127):
+    img_boxes, rect_list, hierarchy  = find_rectangles(img, binary_thres= binary_thres)
     #print_hierarchy(hierarchy)
 
     if frame:
@@ -230,7 +230,7 @@ def segment_img(img, frame = True, GDT_thres = 0.02):
 
     for table in tables:
         for b in table:
-            process_img[b.y - 5 : b.y + b.h + 10, b.x - 5 : b.x + b.w + 10][:] = 255
+            process_img[b.y : b.y + b.h, b.x : b.x + b.w][:] = 255
     
     for gdt in gdt_boxes:
         for g in gdt.values():

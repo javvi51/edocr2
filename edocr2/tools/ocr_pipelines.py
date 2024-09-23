@@ -41,7 +41,7 @@ def ocr_tables(tables, process_img):
     updated_tables = []
     for table in tables:
         for b in table:
-            img = process_img[b.y - 2 : b.y + b.h + 4, b.x - 2 : b.x + b.w + 4][:]
+            img = process_img[b.y : b.y + b.h, b.x : b.x + b.w][:]
             result = ocr_table_cv2(img)
             if result == []:
                 continue
@@ -204,9 +204,9 @@ class Pipeline:
             rect = cv2.minAreaRect(box)
             angle = get_box_angle(box)
             angle = adjust_angle(angle)
-            w=int(max(rect[1])+5)
-            h=int(min(rect[1])+2)
-            img_croped = subimage(img, rect[0],angle,w,h)  
+            w=int(max(rect[1]) + 5)
+            h=int(min(rect[1]) + 2)
+            img_croped = subimage(img, rect[0], angle, w, h)  
             img_croped,thresh=clean_h_lines(img_croped)
             cnts = cv2.findContours(thresh,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0] #Get contourns
             
@@ -435,16 +435,25 @@ def adjust_angle(alfa, i = 5):
         return alfa
 
 def subimage(image, center, theta, width, height):
-   ''' 
-   Rotates OpenCV image around center with angle theta (in deg)
-   then crops the image according to width and height.
-   '''
-   shape = ( image.shape[1], image.shape[0] ) # cv2.warpAffine expects shape in (length, height)
-   matrix = cv2.getRotationMatrix2D( center=center, angle=theta, scale=1 )
-   image = cv2.warpAffine( src=image, M=matrix, dsize=shape )
-   x,y = (int( center[0] - width/2  ),int( center[1] - height/2 ))
-   image = image[ y:y+height, x:x+width ]
-   return image
+    ''' 
+    Rotates OpenCV image around center with angle theta (in deg)
+    then crops the image according to width and height.
+    '''
+    shape = ( image.shape[1], image.shape[0] ) # cv2.warpAffine expects shape in (length, height)
+    matrix = cv2.getRotationMatrix2D( center=center, angle=theta, scale=1 )
+    image = cv2.warpAffine( src=image, M=matrix, dsize=shape )
+    x, y = (int( center[0] - width/2  ),int( center[1] - height/2 ))
+    x2, y2 = x + width, y + height
+
+    if x < 0: x=0
+    if x2 > shape[0]: x2 = shape[0]
+    if y < 0: y=0
+    if y2 > shape[1]: y2 = shape[1]
+
+    image = image[ y:y2, x:x2 ]
+    
+    
+    return image
 
 def clean_h_lines(img_croped):
     gray = cv2.cvtColor(img_croped, cv2.COLOR_BGR2GRAY) #Convert img to grayscale

@@ -229,19 +229,19 @@ def get_fonts(
     Returns:
         A list of font filepaths.
     """
-    '''if cache_dir is None:
+    if cache_dir is None:
         cache_dir = os.path.expanduser(os.path.join("~", ".keras-ocr"))
     fonts_zip_path = tools.download_and_verify(
         url="https://github.com/faustomorales/keras-ocr/releases/download/v0.8.4/fonts.zip",
         sha256="d4d90c27a9bc4bf8fff1d2c0a00cfb174c7d5d10f60ed29d5f149ef04d45b700",
         filename="fonts.zip",
         cache_dir=cache_dir,
-    )'''
+    )
     fonts_dir = os.path.join(cache_dir, "fonts")
-    '''if len(glob.glob(os.path.join(fonts_dir, "**/*.ttf"))) != 2746:
+    if len(glob.glob(os.path.join(fonts_dir, "**/*.ttf"))) != 2746:
         print("Unzipping fonts ZIP file.")
         with zipfile.ZipFile(fonts_zip_path) as zfile:
-            zfile.extractall(fonts_dir)'''
+            zfile.extractall(fonts_dir)
     font_filepaths = glob.glob(os.path.join(fonts_dir, "**/*.ttf"))
     if exclude_smallcaps:
         with open(

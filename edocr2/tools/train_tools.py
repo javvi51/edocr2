@@ -3,6 +3,80 @@ import numpy as np
 from collections import Counter
 
 ############ Synthetic Generation ###############################################
+def get_and_process_fonts(dir_target, alphabet):
+
+    def font_supports_alphabet(font_path, alphabet):
+        from PIL import ImageFont
+        """
+        Check if the given font supports all characters in the specified alphabet.
+
+        :param font_path: Path to the font file.
+        :param alphabet: A string containing all the characters of the alphabet to check.
+        :return: True if the font supports the entire alphabet, False otherwise.
+        """
+        try:
+            # Load the font
+            font = ImageFont.truetype(font_path, size=10)  # Font size is arbitrary
+        except IOError:
+            print(f"Error: Cannot load font from {font_path}")
+            return False
+
+        # Check each character in the alphabet
+        try:
+            for char in alphabet:
+                if not font.getmask(char).getbbox():
+                    # If getbbox returns None, the character is not supported
+                    print(f"Character '{char}' is not supported by {font_path}")
+                    return False
+        except:
+            return False
+
+        return True
+
+    def move_file_to_directory(file_path, target_directory):
+        """
+        Move a file to a new directory.
+        
+        :param file_path: The path to the file that will be moved.
+        :param target_directory: The directory where the file will be moved.
+        """
+        try:
+            # Ensure the target directory exists
+            if not os.path.exists(target_directory):
+                os.makedirs(target_directory)
+
+            # Move the file
+            shutil.move(file_path, target_directory)
+            print(f"Moved: {file_path} -> {target_directory}")
+
+        except Exception as e:
+            print(f"Error moving {file_path} to {target_directory}: {e}")
+    
+    #Download files from keras_ocr:
+    from edocr2.keras_ocr.tools import download_and_verify
+    import glob, zipfile, shutil
+    fonts_zip_path = download_and_verify(
+        url="https://github.com/faustomorales/keras-ocr/releases/download/v0.8.4/fonts.zip",
+        sha256="d4d90c27a9bc4bf8fff1d2c0a00cfb174c7d5d10f60ed29d5f149ef04d45b700",
+        filename="fonts.zip",
+        cache_dir='.',
+    )
+    fonts_dir = os.path.join('.', "fonts")
+    if len(glob.glob(os.path.join(fonts_dir, "**/*.ttf"))) != 2746:
+        print("Unzipping fonts ZIP file.")
+        with zipfile.ZipFile(fonts_zip_path) as zfile:
+            zfile.extractall(fonts_dir)
+
+    for root, dirs, _ in os.walk('fonts'):
+        for dir in dirs:
+            for _, _, files2 in os.walk(os.path.join(root, dir)):
+                for file in files2:
+                    if file.endswith("Regular.ttf"):
+                        font_path = os.path.join(root, dir, file)
+                        if font_supports_alphabet(font_path, alphabet):
+                            # Add the full path to the array
+                            move_file_to_directory(font_path, dir_target)
+    shutil.rmtree('fonts')
 
 def get_balanced_text_generator(alphabet, string_length=(5, 10), lowercase=False):
     '''
@@ -467,7 +541,7 @@ def test_detect(test_path, detector, show_img = False):
                 best_iou = max(best_iou, iou)  # Track the best IoU score for this prediction
 
             iou_scores.append(best_iou)
-            
+
         if show_img:
             for box in pred:
                 for xy in box:
@@ -508,9 +582,5 @@ def calculate_iou(predicted_polygon, ground_truth_polygon):
 
     iou = intersection_area / union_area
     return iou
-
-#TODO: test_detect
-
-#TODO: remove paint from backgrounds
 
 #TODO: train_detect function on given dataset

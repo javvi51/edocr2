@@ -1,7 +1,6 @@
 import string, os
 from edocr2.tools import train_tools
 
-
 #region ############# Alphabet definition #################
 GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
 FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
@@ -16,6 +15,10 @@ for i in os.listdir('edocr2/tools/gdt_fonts'):
     gdt_fonts.append(os.path.join('edocr2/tools/gdt_fonts', i))
 
 
+dimension_fonts = []
+for i in os.listdir('edocr2/tools/dimension_fonts'):
+    dimension_fonts.append(os.path.join('edocr2/tools/dimension_fonts', i))
+
 #region ############## Detector ##############################
 
 ########## Training Detector ###############################
@@ -23,27 +26,27 @@ for i in os.listdir('edocr2/tools/gdt_fonts'):
 
 
 ######### Testing Detector #################################
-train_tools.save_detect_samples(alphabet_dimensions, gdt_fonts, 10)
+'''train_tools.save_detect_samples(alphabet_dimensions, gdt_fonts, 10)
 from edocr2.keras_ocr.detection import Detector
-detect_basepath = 'edocr2/models/detector_13_46'
+#detect_basepath = 'edocr2/models/detector_13_46'
 detector = Detector()
 detector.model.load_weights(detect_basepath + '.keras')
-train_tools.test_detect('detect_samples', detector, show_img=False)
+train_tools.test_detect('detect_samples', detector, show_img=False)'''
 
 #endregion
 
 #region ############## Recognizer ############################
 
-'''########## Training Recognizer #############################
-recog_basepath = train_tools.train_synth_recognizer(alphabet_gdts, gdt_fonts, samples = 35000, epochs = 5, batch_size=256, basepath = 'edocr2/models')
+########## Training Recognizer #############################
+recog_basepath = train_tools.train_synth_recognizer(alphabet_dimensions, dimension_fonts, samples = 35000, epochs = 10, batch_size=256, basepath = 'edocr2/models')
 
 ########## Testing Recognizer ##############################
 
 from edocr2.keras_ocr.recognition import Recognizer
-recognizer = Recognizer(alphabet=alphabet_gdts)
-train_tools.save_recog_samples(alphabet_gdts, gdt_fonts, 30, recognizer)
+recognizer = Recognizer(alphabet=alphabet_dimensions)
+train_tools.save_recog_samples(alphabet_dimensions, dimension_fonts, 30, recognizer)
 #recog_basepath = 'recognizer_8_32'
 recognizer.model.load_weights(recog_basepath + '.keras')
-train_tools.test_recog('recog_samples', recognizer)'''
+train_tools.test_recog('recog_samples', recognizer)
 
 #endregion
