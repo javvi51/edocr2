@@ -57,6 +57,10 @@
      ```bash
      sudo apt-get install libleptonica-dev tesseract-ocr libtesseract-dev python3-pil tesseract-ocr-eng tesseract-ocr-script-latn
      ```
+   - For swedish:
+     ```bash
+     sudo apt-get install tesseract-ocr-swe
+     ```
    - Install Tesseract and pytesseract:
      ```bash
      pip install tesseract

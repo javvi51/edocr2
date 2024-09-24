@@ -2,7 +2,7 @@ import cv2, math, os
 import numpy as np
 
 ###################### Tables Pipeline #################################
-def ocr_table_cv2(image_cv2):
+def ocr_table_cv2(image_cv2, languague = None):
     """Recognize text in an OpenCV image using pytesseract and return both text and positions.
     
     Args:
@@ -16,7 +16,10 @@ def ocr_table_cv2(image_cv2):
     img_rgb = cv2.cvtColor(image_cv2, cv2.COLOR_BGR2RGB)
     
     # Custom configuration to recognize a more complete set of characters
-    custom_config = r'--psm 6'
+    if languague:
+        custom_config = f'--psm 6 -l {languague}'
+    else:
+        custom_config = r'--psm 6'
 
     # Perform OCR and get bounding box details
     ocr_data = pytesseract.image_to_data(img_rgb, config=custom_config, output_type=pytesseract.Output.DICT)
@@ -36,13 +39,13 @@ def ocr_table_cv2(image_cv2):
 
     return result
 
-def ocr_tables(tables, process_img):
+def ocr_tables(tables, process_img, languague = None):
     results = []
     updated_tables = []
     for table in tables:
         for b in table:
             img = process_img[b.y : b.y + b.h, b.x : b.x + b.w][:]
-            result = ocr_table_cv2(img)
+            result = ocr_table_cv2(img, languague)
             if result == []:
                 continue
             else:
@@ -128,25 +131,18 @@ def recognize_gdt(img, block, recognizer):
 
     return pred
 
-def ocr_gdt(img, gdt_boxes, alphabet = None, model_path = None):
-
-    from edocr2.keras_ocr.recognition import Recognizer
-
-    if alphabet and model_path: 
-        recognizer =Recognizer(alphabet = alphabet)
-        recognizer.model.load_weights(model_path)
-    else:
-        recognizer =Recognizer()
+def ocr_gdt(img, gdt_boxes, recognizer):
 
     updated_gdts = []
     results = []
-    for block in gdt_boxes:
-        for _, bl_list in block.items():
-            if is_not_empty(img, bl_list, 50):
-                sorted_block = sort_gdt_boxes(bl_list, 3)
-                pred = recognize_gdt(img, sorted_block, recognizer)
-                updated_gdts.append(block)
-                results.append([pred, (sorted_block[0].x, sorted_block[0].y)])
+    if gdt_boxes:
+        for block in gdt_boxes:
+            for _, bl_list in block.items():
+                if is_not_empty(img, bl_list, 50):
+                    sorted_block = sort_gdt_boxes(bl_list, 3)
+                    pred = recognize_gdt(img, sorted_block, recognizer)
+                    updated_gdts.append(block)
+                    results.append([pred, (sorted_block[0].x, sorted_block[0].y)])
     
     return results, updated_gdts
 
@@ -215,7 +211,8 @@ class Pipeline:
                 img_croped=cv2.rotate(img_croped,cv2.ROTATE_90_COUNTERCLOCKWISE)
                 box_groups=[np.array([[[0,0],[h,0],[h,w],[0,w]]])]
                 pred=self.recognizer.recognize_from_boxes(images=[img_croped],box_groups=box_groups,**recognition_kwargs)[0][0]
-            elif 1<len(cnts)<15:
+                predictions.append((pred, box))
+            elif 1<len(cnts)<20:
                 arr=check_tolerances(img_croped)
                 pred=''
                 for img_ in arr:
@@ -228,8 +225,7 @@ class Pipeline:
                     else:
                         pred+=pred_+' '
                 pred=pred[:-1]
-
-            predictions.append((pred, box))
+                predictions.append((pred, box))
         return predictions
 
     def ocr_img_patches(self, img, patches, ol = 0.05, cluster_t = 20):
@@ -466,19 +462,7 @@ def clean_h_lines(img_croped):
         cv2.drawContours(img_croped, [c], -1, (255,255,255), 2)
     return img_croped, thresh
 
-def ocr_dimensions(img, alphabet = None, detector_path = None, recognizer_path = None, cluster_thres = 20, patches = (5, 4), backg_save = False):
-    from edocr2.keras_ocr.recognition import Recognizer
-    from edocr2.keras_ocr.detection import Detector
-
-    if alphabet and recognizer_path: 
-        recognizer =Recognizer(alphabet = alphabet)
-        recognizer.model.load_weights(recognizer_path)
-    else:
-        recognizer =Recognizer()  
-
-    detector = Detector()
-    if detector_path:
-        detector.model.load_weights(detector_path)
+def ocr_dimensions(img, detector, recognizer, cluster_thres = 20, patches = (5, 4), backg_save = False):
     
     pipeline = Pipeline(recognizer=recognizer, detector=detector)
     results = pipeline.ocr_img_patches(img, patches, 0.05, cluster_thres)
@@ -500,5 +484,4 @@ def ocr_dimensions(img, alphabet = None, detector_path = None, recognizer_path =
         image_filename = os.path.join(backg_path , f'backg_{i + 1}.png')
         cv2.imwrite(image_filename, process_img)
         
-
     return results

@@ -470,7 +470,6 @@ def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, bat
 def train_detector(data_path, batch_size = 8, epochs = 10, val_split = 0.2, pretrained = None):
     import tensorflow as tf
     from sklearn.model_selection import train_test_split
-    from edocr2 import keras_ocr
     import os
     import time
     import math
