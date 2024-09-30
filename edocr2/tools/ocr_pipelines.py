@@ -26,6 +26,7 @@ def ocr_table_cv2(image_cv2, languague = None):
 
     # Prepare result: text with their positions
     result = []
+    all_text = ''
     for i in range(len(ocr_data['text'])):
         if ocr_data['text'][i].strip():  # If text is not empty
             text_info = {
@@ -35,10 +36,11 @@ def ocr_table_cv2(image_cv2, languague = None):
                 'width': ocr_data['width'][i],
                 'height': ocr_data['height'][i]
             }
+            all_text += ocr_data['text'][i]
             result.append(text_info)
-
-    return result
-
+    if len(all_text) > 5:
+        return result
+    return []
 def ocr_tables(tables, process_img, languague = None):
     results = []
     updated_tables = []
@@ -211,7 +213,8 @@ class Pipeline:
                 img_croped=cv2.rotate(img_croped,cv2.ROTATE_90_COUNTERCLOCKWISE)
                 box_groups=[np.array([[[0,0],[h,0],[h,w],[0,w]]])]
                 pred=self.recognizer.recognize_from_boxes(images=[img_croped],box_groups=box_groups,**recognition_kwargs)[0][0]
-                predictions.append((pred, box))
+                if pred.isdigit():
+                    predictions.append((pred, box))
             elif 1<len(cnts)<20:
                 arr=check_tolerances(img_croped)
                 pred=''
@@ -225,7 +228,8 @@ class Pipeline:
                     else:
                         pred+=pred_+' '
                 pred=pred[:-1]
-                predictions.append((pred, box))
+                if any(char.isdigit() for char in pred):
+                    predictions.append((pred, box))
         return predictions
 
     def ocr_img_patches(self, img, patches, ol = 0.05, cluster_t = 20):

@@ -4,3 +4,4 @@
 /edocr2/tools/dimension_fonts/
 /recog_samples/
 /detect_samples/
+.env

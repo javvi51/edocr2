@@ -16,7 +16,7 @@ Extra = '(),.+-±:/°"⌀'
 
 alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
 alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
-#alphabet_dimensions = string.digits + string.ascii_lowercase + string.ascii_uppercase + Extra
+
 #endregion
 
 #region ############ Segmentation Task ###################
@@ -31,7 +31,7 @@ print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\
 #region ############ OCR Tables ###########################
 start_time = time.time()
 
-table_results, updated_tables = tools.ocr_pipelines.ocr_tables(tables, img, languague='swe')
+table_results, updated_tables = tools.ocr_pipelines.ocr_tables(tables, img, languague='eng')
 
 end_time = time.time()
 print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
@@ -53,7 +53,7 @@ for gpu in gpus:
 # Load models
 gdt_model = 'edocr2/models/recognizer_gdts.keras'
 dim_model = 'edocr2/models/recognizer_dimensions.keras'
-detector_model = 'edocr2/models/detector_15_58.keras'
+detector_model = None #'edocr2/models/detector_8_31.keras'
 
 recognizer_gdt = None
 if gdt_boxes:
@@ -66,7 +66,6 @@ detector = Detector()
 
 if detector_model:
     detector.model.load_weights(detector_model)
-
 
 end_time = time.time()   
 print(f"\033[1;33mLoading session took {end_time - start_time:.6f} seconds to run.\033[0m")
@@ -85,23 +84,22 @@ start_time = time.time()
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 
-dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, cluster_thres=15, patches=(3, 5), backg_save=False)
+dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, cluster_thres=20, patches=(3, 5), backg_save=False)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
-############ Output #######################
+#region ########### Output #######################
 start_time = time.time()
 mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame)
 
-#os.makedirs(output_path, exist_ok=True)
-#tools.output_tools.save_raw_output(output_path, table_results, gdt_results, dimensions)
+
+table_results, gdt_results, dimensions = tools.output_tools.process_raw_output(output_path, table_results, gdt_results, dimensions)
 
 end_time = time.time()
 print(f"\033[1;33mRaw output generation took {end_time - start_time:.6f} seconds to run.\033[0m")
-############ Communicating with LLM ###############
-
+#endregion
 
 ###################################################
 cv2.imshow('boxes', mask_img)

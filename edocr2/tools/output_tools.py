@@ -45,9 +45,12 @@ def mask_img(img, gdt_boxes, tables, dimensions, frame):
    
     return mask_img
 
-def save_raw_output(outputh_path, table_results = None, gdt_results = None, dimension_results = None):
+def process_raw_output(output_path, table_results = None, gdt_results = None, dimension_results = None, save = False):
+    if save:
+        os.makedirs(output_path, exist_ok=True)
     #Write Table Results
     if table_results:
+
         def group_lines_by_top(ocr_data, tolerance=10):
             """Groups words into lines by their top coordinate, using a tolerance."""
             lines = []
@@ -73,23 +76,32 @@ def save_raw_output(outputh_path, table_results = None, gdt_results = None, dime
 
             # Group the OCR data into lines
         
-        csv_file = os.path.join(outputh_path, 'table_results.csv')
+        if save:
+            csv_file = os.path.join(output_path, 'table_results.csv')
 
-        for t in range(len(table_results)):
-            grouped_lines = group_lines_by_top(table_results[t])
-            # Save to CSV
-            with open(csv_file, mode='a', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                writer.writerow([f'TABLE_{t}'])
-                
-                for line in grouped_lines:
-                    # Write each text instance in a separate cell
-                    writer.writerow([entry['text'] for entry in line])
-                writer.writerow([''])
+            for t in range(len(table_results)):
+                grouped_lines = group_lines_by_top(table_results[t])
+                # Save to CSV
+                with open(csv_file, mode='a', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+                    writer.writerow([f'TABLE_{t}'])
+                    
+                    for line in grouped_lines:
+                        # Write each text instance in a separate cell
+                        writer.writerow([entry['text'] for entry in line])
+                    writer.writerow([''])
+
+        new_table_results =[]
+        for table in table_results:
+            tab_results = []
+            for item in table:
+                tab_results.append([item['text'], (item['left'], item['top'])])
+            new_table_results.append(tab_results)
+        table_results = new_table_results
 
     #Write GD&T Results
-    if gdt_results:
-        csv_file = os.path.join(outputh_path, 'gdt_results.csv')
+    if gdt_results and save:
+        csv_file = os.path.join(output_path, 'gdt_results.csv')
         with open(csv_file, mode='w', newline='') as file:
             writer = csv.writer(file)
             # Write the header
@@ -101,15 +113,22 @@ def save_raw_output(outputh_path, table_results = None, gdt_results = None, dime
                 
     #Write Dimension Results
     if dimension_results:
-        csv_file = os.path.join(outputh_path, 'dimension_results.csv')
-        with open(csv_file, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            # Write the header
-            writer.writerow(["Text", "Center X Coordinate", "Center Y Coordinate"])
-            # Write the data
-            for item in dimension_results:
-                text, coords = item
-                center = np.mean(coords, axis=0)
-                writer.writerow([text, center[0], center[1]])
+        new_dim_results = []
+        for item in dimension_results:
+            text, coords = item
+            center = np.mean(coords, axis=0).astype(int).tolist()
+            new_dim_results.append([text, center])
+        dimension_results = new_dim_results
+        if save:
+            csv_file = os.path.join(output_path, 'dimension_results.csv')
+            with open(csv_file, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                # Write the header
+                writer.writerow(["Text", "Center X Coordinate", "Center Y Coordinate"])
+                # Write the data
+                for i in new_dim_results:
+                    writer.writerow([i[0], i[1][0], i[1][1]])
+
+    return table_results, gdt_results, dimension_results
 
 

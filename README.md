@@ -19,14 +19,15 @@
      wget https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh
      ```
    
-2. Install **CUDA 12.3** from the [Nvidia CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit).
+2. Install **CUDA 11.8** from the [Nvidia CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit).
 
 3. Add CUDA to your `.bashrc` file:
    - Follow the instructions in this [Ask Ubuntu post](https://askubuntu.com/questions/885610/nvcc-version-command-says-nvcc-is-not-installed) to configure your environment.
 
-4. Create your conda environment (Python 3.9)
+4. Create your conda environment (Python 3.11)
    ```bash
-   conda create -n edocr python=3.9
+   conda create -n edocr python=3.11 -y
+   conda activate edocr
    ```
 
 4. Install **TensorFlow** with CUDA support:

@@ -28,7 +28,7 @@ for i in os.listdir('edocr2/tools/dimension_fonts'):
 ######### Testing Detector #################################
 train_tools.save_detect_samples(alphabet_dimensions, gdt_fonts, 10)
 from edocr2.keras_ocr.detection import Detector
-detect_basepath = 'edocr2/models/detector_15_58.keras'
+detect_basepath = 'edocr2/models/detector_8_31.keras'
 detector = Detector()
 detector.model.load_weights(detect_basepath)
 train_tools.test_detect('detect_samples', detector, show_img=True)

@@ -9,3 +9,5 @@ efficientnet == 1.0.0
 essential_generators
 editdistance
 pyclipper
+python-dotenv
+accelerate
