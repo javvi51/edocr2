@@ -1,0 +1,1 @@
+#TODO: Build this file, change ocr_it and test it, loop through pdfs

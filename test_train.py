@@ -1,14 +1,13 @@
 import string, os
 from edocr2.tools import train_tools
 
-#region ############# Alphabet definition #################
+#region ############# Alphabet and fonts definition #################
 GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
 FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
 Extra = '(),.+-±:/°"⌀'
 
 alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
 alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
-#endregion
 
 gdt_fonts=[]
 for i in os.listdir('edocr2/tools/gdt_fonts'):
@@ -18,6 +17,7 @@ for i in os.listdir('edocr2/tools/gdt_fonts'):
 dimension_fonts = []
 for i in os.listdir('edocr2/tools/dimension_fonts'):
     dimension_fonts.append(os.path.join('edocr2/tools/dimension_fonts', i))
+#endregion
 
 #region ############## Detector ##############################
 

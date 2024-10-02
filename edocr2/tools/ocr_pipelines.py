@@ -1,8 +1,8 @@
 import cv2, math, os
 import numpy as np
 
-###################### Tables Pipeline #################################
-def ocr_table_cv2(image_cv2, languague = None):
+###################### Tables and Others Pipeline #################################
+def ocr_img_cv2(image_cv2, language = None):
     """Recognize text in an OpenCV image using pytesseract and return both text and positions.
     
     Args:
@@ -16,10 +16,10 @@ def ocr_table_cv2(image_cv2, languague = None):
     img_rgb = cv2.cvtColor(image_cv2, cv2.COLOR_BGR2RGB)
     
     # Custom configuration to recognize a more complete set of characters
-    if languague:
-        custom_config = f'--psm 6 -l {languague}'
+    if language:
+        custom_config = f'--psm 11 -l {language}'
     else:
-        custom_config = r'--psm 6'
+        custom_config = r'--psm 11'
 
     # Perform OCR and get bounding box details
     ocr_data = pytesseract.image_to_data(img_rgb, config=custom_config, output_type=pytesseract.Output.DICT)
@@ -38,19 +38,22 @@ def ocr_table_cv2(image_cv2, languague = None):
             }
             all_text += ocr_data['text'][i]
             result.append(text_info)
-    if len(all_text) > 5:
-        return result
-    return []
-def ocr_tables(tables, process_img, languague = None):
+    
+    return result, all_text
+
+def ocr_tables(tables, process_img, language = None):
     results = []
     updated_tables = []
     for table in tables:
         for b in table:
             img = process_img[b.y : b.y + b.h, b.x : b.x + b.w][:]
-            result = ocr_table_cv2(img, languague)
-            if result == []:
+            result, all_text = ocr_img_cv2(img, language)
+            if result == [] or len(all_text) < 5:
                 continue
             else:
+                for r in result:
+                    r['left'] += b.x
+                    r['top'] += b.y
                 results.append(result)
                 updated_tables.append(table)
     return results, updated_tables
@@ -159,11 +162,13 @@ class Pipeline:
         max_size: The maximum single-side dimension of images for
             inference.
     """
-    def __init__(self, detector, recognizer, scale = 2, max_size = 2048):
+    def __init__(self, detector, recognizer, max_char = 10, scale = 2, max_size = 2048, language = 'eng'):
         self.scale = scale
         self.detector = detector
         self.recognizer = recognizer
         self.max_size = max_size
+        self.max_char = max_char
+        self.language = language
 
     def detect(self, img, detection_kwargs = None):
         """Run the pipeline on one or multiples images.
@@ -194,9 +199,45 @@ class Pipeline:
             for boxes, scale in zip(box_groups, [scale])
         ]
         return box_groups
+    
+    def ocr_the_rest(self, img):
+
+        def sort_boxes_by_centers(boxes, y_threshold=20):
+            # Sort primarily by the y_center (top-to-bottom), and secondarily by x_center (left-to-right)
+            sorted_boxes = sorted(boxes, key=lambda box: (box['top'], box['left']))  # Sort by (y_center, x_center)
+            final_sorted_text = ""
+
+            current_line = []
+            current_y = sorted_boxes[0]['top']  # y_center of the first box
+
+            for box in sorted_boxes:
+                if abs(box['top'] - current_y) <= y_threshold:  # If y_center is within threshold, same line
+                    current_line.append(box)
+                else:
+                    # Sort the current line by x_center (left-to-right)
+                    current_line = sorted(current_line, key=lambda b: b['left'])  # Sort by x_center
+                    line_text = ' '.join([b['text'] for b in current_line])  # Join text in current line
+                    final_sorted_text += line_text + '\n'  # Add the text for the line and a newline
+                    
+                    current_line = [box]  # Start a new line
+                    current_y = box['top']
+
+            # Sort the last line and add to final result
+            current_line = sorted(current_line, key=lambda b: b['left'])
+            line_text = ' '.join([b['text'] for b in current_line])
+            final_sorted_text += line_text  # No newline for the last line
+
+            return final_sorted_text
+    
+        results, _ = ocr_img_cv2(img, self.language)
+        if results:
+            text = sort_boxes_by_centers(results)
+            return text
+        return ''
 
     def recognize_dimensions(self, box_groups, img):
         predictions=[]
+        other_info=[]
         recognition_kwargs={}
         for box in box_groups:
             rect = cv2.minAreaRect(box)
@@ -206,6 +247,8 @@ class Pipeline:
             h=int(min(rect[1]) + 2)
             img_croped = subimage(img, rect[0], angle, w, h)  
             img_croped,thresh=clean_h_lines(img_croped)
+            gray = cv2.cvtColor(img_croped, cv2.COLOR_BGR2GRAY)
+            _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
             cnts = cv2.findContours(thresh,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0] #Get contourns
             
             if len(cnts)==1:
@@ -215,7 +258,7 @@ class Pipeline:
                 pred=self.recognizer.recognize_from_boxes(images=[img_croped],box_groups=box_groups,**recognition_kwargs)[0][0]
                 if pred.isdigit():
                     predictions.append((pred, box))
-            elif 1<len(cnts)<20:
+            elif 1<len(cnts)<self.max_char:
                 arr=check_tolerances(img_croped)
                 pred=''
                 for img_ in arr:
@@ -230,7 +273,10 @@ class Pipeline:
                 pred=pred[:-1]
                 if any(char.isdigit() for char in pred):
                     predictions.append((pred, box))
-        return predictions
+            else:
+                pred = self.ocr_the_rest(img_croped)
+                other_info.append((pred, box))
+        return predictions, other_info
 
     def ocr_img_patches(self, img, patches, ol = 0.05, cluster_t = 20):
 
@@ -264,8 +310,9 @@ class Pipeline:
                 
         box_groups = group_polygons_by_proximity(box_groups, eps = cluster_t)
         new_group = [box for box in box_groups]
-        snippets = self.recognize_dimensions(np.int32(new_group), np.array(img))
-        return snippets
+        print('Detection finished. Performing recognition...')
+        dimensions, other_info = self.recognize_dimensions(np.int32(new_group), np.array(img))
+        return dimensions, other_info
 
 def group_polygons_by_proximity(polygons, eps=50):
         from shapely.geometry import Polygon, MultiPolygon
@@ -342,7 +389,8 @@ def group_polygons_by_proximity(polygons, eps=50):
 
 def check_tolerances(img):
     img_arr = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) #Convert img to grayscale
-    flag=False 
+    flag=False
+    tole = False
     ## Find top and bottom line
     for i in range(0, img_arr.shape[0] - 1): # find top line
         for j in range(0,img_arr.shape[1] - 1):
@@ -466,26 +514,32 @@ def clean_h_lines(img_croped):
         cv2.drawContours(img_croped, [c], -1, (255,255,255), 2)
     return img_croped, thresh
 
-def ocr_dimensions(img, detector, recognizer, cluster_thres = 20, patches = (5, 4), backg_save = False):
+def ocr_dimensions(img, detector, recognizer, cluster_thres = 20, patches = (5, 4), max_char = 10, language = 'eng', backg_save = False):
     
-    pipeline = Pipeline(recognizer=recognizer, detector=detector)
-    results = pipeline.ocr_img_patches(img, patches, 0.05, cluster_thres)
+    pipeline = Pipeline(recognizer=recognizer, detector=detector, max_char = max_char, language=language)
+    dimensions, other_info = pipeline.ocr_img_patches(img, patches, 0.05, cluster_thres)
 
-    #For patches background generation in synthetic data training
+    process_img = img.copy()
+    for dim in dimensions:
+        box = dim[1]
+        pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])])
+        cv2.fillPoly(process_img, [pts], (255, 255, 255))
+    
+    for dim in other_info:
+        box = dim[1]
+        pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])])
+        cv2.fillPoly(process_img, [pts], (255, 255, 255))
+    
+    # patches background generation for synthetic data training
+    # Save the image
     if backg_save:
+        
         backg_path = os.path.join(os.getcwd(), 'edocr2/tools/backgrounds')
         os.makedirs(backg_path, exist_ok=True)
         i = 0
         for root_dir, cur_dir, files in os.walk(backg_path):
             i += len(files)
-
-        process_img = img.copy()
-        for dim in results:
-            box = dim[1]
-            pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])])
-            cv2.fillPoly(process_img, [pts], (255, 255, 255))
-        # Save the image
         image_filename = os.path.join(backg_path , f'backg_{i + 1}.png')
         cv2.imwrite(image_filename, process_img)
         
-    return results
+    return dimensions, other_info, process_img

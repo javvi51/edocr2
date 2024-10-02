@@ -5,3 +5,4 @@
 /recog_samples/
 /detect_samples/
 .env
+/tests/test_samples/Washers/

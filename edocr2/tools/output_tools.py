@@ -19,7 +19,7 @@ def mask_frame(mask_img, cl, color):
     result = np.where(mask==0, img_color, mask_img)
     return result
 
-def mask_img(img, gdt_boxes, tables, dimensions, frame):
+def mask_img(img, gdt_boxes, tables, dimensions, frame, other_info):
     mask_img=img.copy()
     for table in tables:
         for tab in table:
@@ -42,12 +42,16 @@ def mask_img(img, gdt_boxes, tables, dimensions, frame):
         box = dim[1]
         pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
         mask_img = mask_box(mask_img, pts, (93, 206, 175))
+    
+    for info in other_info:
+        box = info[1]
+        pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
+        mask_img = mask_box(mask_img, pts, (150, 147, 113))
+
    
     return mask_img
 
-def process_raw_output(output_path, table_results = None, gdt_results = None, dimension_results = None, save = False):
-    if save:
-        os.makedirs(output_path, exist_ok=True)
+def process_raw_output(output_path, table_results = None, gdt_results = None, dimension_results = None, other_info = None, save = False):
     #Write Table Results
     if table_results:
 
@@ -128,7 +132,24 @@ def process_raw_output(output_path, table_results = None, gdt_results = None, di
                 # Write the data
                 for i in new_dim_results:
                     writer.writerow([i[0], i[1][0], i[1][1]])
+    
+    if other_info:
+        new_info_results = []
+        for item in other_info:
+            text, coords = item
+            center = np.mean(coords, axis=0).astype(int).tolist()
+            new_info_results.append([text, center])
+        other_info = new_info_results
+        if save:
+            csv_file = os.path.join(output_path, 'other_info.csv')
+            with open(csv_file, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                # Write the header
+                writer.writerow(["Text", "Center X Coordinate", "Center Y Coordinate"])
+                # Write the data
+                for i in new_info_results:
+                    writer.writerow([i[0], i[1][0], i[1][1]])
 
-    return table_results, gdt_results, dimension_results
+    return table_results, gdt_results, dimension_results, other_info
 
 

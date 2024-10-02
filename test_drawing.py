@@ -1,10 +1,15 @@
 import cv2, string, time, os
+import numpy as np
 from edocr2 import tools
+from pdf2image import convert_from_path
            
-file_path = 'tests/test_samples/halter.jpg'
-img = cv2.imread(file_path)
-#img = convert_from_path(file_path)
-#img = np.array(img[0])
+file_path = 'tests/test_samples/4132864.jpg'
+
+if file_path.endswith('.pdf'):
+    img = convert_from_path(file_path)
+    img = np.array(img[0])
+else:
+    img = cv2.imread(file_path)
 
 filename = os.path.splitext(os.path.basename(file_path))[0]
 output_path = os.path.join('.', filename)
@@ -16,28 +21,19 @@ Extra = '(),.+-±:/°"⌀'
 
 alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
 alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
-
+language = 'swe'
 #endregion
 
-#region ############ Segmentation Task ###################
+#region ############ Segmentation Task ####################
 start_time = time.time()
 
-img_boxes, process_img, frame, gdt_boxes, tables  = tools.layer_segm.segment_img(img, frame = True, GDT_thres = 0.02)
+img_boxes, process_img, frame, gdt_boxes, tables  = tools.layer_segm.segment_img(img, frame = True, GDT_thres = 0.02, binary_thres=127)
 
 end_time = time.time()
 print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
-#region ############ OCR Tables ###########################
-start_time = time.time()
-
-table_results, updated_tables = tools.ocr_pipelines.ocr_tables(tables, img, languague='eng')
-
-end_time = time.time()
-print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
-#endregion
-
-#region ######## Set Session ###############################
+#region ######## Set Session ##############################
 start_time = time.time()
 os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 import tensorflow as tf
@@ -84,18 +80,26 @@ start_time = time.time()
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 
-dimensions = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, cluster_thres=20, patches=(3, 5), backg_save=False)
+dimensions, other_info, process_img = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, cluster_thres=20, patches=(5, 3), max_char = 15, language=language, backg_save=False)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
-#region ########### Output #######################
+#region ############ OCR Tables ###########################
 start_time = time.time()
-mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame)
 
+table_results, updated_tables = tools.ocr_pipelines.ocr_tables(tables, img, language)
 
-table_results, gdt_results, dimensions = tools.output_tools.process_raw_output(output_path, table_results, gdt_results, dimensions)
+end_time = time.time()
+print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
+#endregion
+
+#region ########### Output ################################
+start_time = time.time()
+mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame, other_info)
+
+table_results, gdt_results, dimensions, other_info = tools.output_tools.process_raw_output(output_path, table_results, gdt_results, dimensions, other_info, save=False)
 
 end_time = time.time()
 print(f"\033[1;33mRaw output generation took {end_time - start_time:.6f} seconds to run.\033[0m")

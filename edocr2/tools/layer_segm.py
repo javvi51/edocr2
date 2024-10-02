@@ -218,10 +218,13 @@ def segment_img(img, frame = True, GDT_thres = 0.02, binary_thres = 127):
     if frame:
         framed_list=[]
         frame = find_frame(rect_list)
-        for rect in rect_list:
-            if is_contained(rect, frame):
-                framed_list.append(rect)
-        rect_list = framed_list
+        if frame.h *frame.w > 0.85* (img.shape[0] * img.shape[1]):
+            for rect in rect_list:
+                if is_contained(rect, frame):
+                    framed_list.append(rect)
+            rect_list = framed_list
+        else:
+            frame = False
 
     clusters = find_clusters(rect_list)
 
