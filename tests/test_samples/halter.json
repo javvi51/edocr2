@@ -1,0 +1,129 @@
+{
+  "version": "0.4.10",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "⌀550 A3",
+      "text": "",
+      "points": [
+        [
+          1153.0,
+          294.0
+        ],
+        [
+          1285.0,
+          401.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "45°",
+      "text": "",
+      "points": [
+        [
+          921.0,
+          611.0
+        ],
+        [
+          996.0,
+          659.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "0.00 35.00-0.20",
+      "text": "",
+      "points": [
+        [
+          1168.0,
+          1139.0
+        ],
+        [
+          1265.0,
+          1398.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "45°",
+      "text": "",
+      "points": [
+        [
+          560.0,
+          1748.0
+        ],
+        [
+          634.0,
+          1792.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "2x⌀8,80H8",
+      "text": "",
+      "points": [
+        [
+          602.0,
+          1935.0
+        ],
+        [
+          791.0,
+          1971.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "2x⌀4.80 +0.1 0",
+      "text": "",
+      "points": [
+        [
+          1127.0,
+          2014.0
+        ],
+        [
+          1336.0,
+          2099.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "other_info",
+      "text": "",
+      "points": [
+        [
+          1779.0,
+          2299.0
+        ],
+        [
+          2113.0,
+          2376.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    }
+  ],
+  "imagePath": "halter.jpg",
+  "imageData": null,
+  "imageHeight": 3250,
+  "imageWidth": 2250
+}

@@ -1,37 +1,10 @@
 import random, time, os, math, cv2
 import numpy as np
 from collections import Counter
+import typing
 
 ############ Synthetic Generation ###############################################
-def get_and_process_fonts(dir_target, alphabet):
-
-    def font_supports_alphabet(font_path, alphabet):
-        from PIL import ImageFont
-        """
-        Check if the given font supports all characters in the specified alphabet.
-
-        :param font_path: Path to the font file.
-        :param alphabet: A string containing all the characters of the alphabet to check.
-        :return: True if the font supports the entire alphabet, False otherwise.
-        """
-        try:
-            # Load the font
-            font = ImageFont.truetype(font_path, size=10)  # Font size is arbitrary
-        except IOError:
-            print(f"Error: Cannot load font from {font_path}")
-            return False
-
-        # Check each character in the alphabet
-        try:
-            for char in alphabet:
-                if not font.getmask(char).getbbox():
-                    # If getbbox returns None, the character is not supported
-                    print(f"Character '{char}' is not supported by {font_path}")
-                    return False
-        except:
-            return False
-
-        return True
+def get_and_process_fonts(dir_target):
 
     def move_file_to_directory(file_path, target_directory):
         """
@@ -73,12 +46,54 @@ def get_and_process_fonts(dir_target, alphabet):
                 for file in files2:
                     if file.endswith("Regular.ttf"):
                         font_path = os.path.join(root, dir, file)
-                        if font_supports_alphabet(font_path, alphabet):
-                            # Add the full path to the array
-                            move_file_to_directory(font_path, dir_target)
+                        move_file_to_directory(font_path, dir_target)
     shutil.rmtree('fonts')
 
-def get_balanced_text_generator(alphabet, string_length=(5, 10), lowercase=False):
+def check_fonts(folder_path = 'edocr2/tools/dimension_fonts/', characters = '(),.+-±:/°"⌀'):
+    from PIL import Image, ImageDraw, ImageFont
+    def draw_character_cv2(char, font_path, font_size, img_width, img_height):
+        # Create a blank image using PIL (RGBA mode to handle transparency)
+        pil_image = Image.new('RGBA', (img_width, img_height), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(pil_image)
+
+        # Load the TTF font
+        font = ImageFont.truetype(font_path, font_size)
+
+        # Get the size of the text to center it in the image
+        bbox = font.getbbox(char)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        # Calculate the position to center the character
+        position = ((img_width - text_width) // 2, (img_height - text_height) // 2)
+
+        # Draw the character onto the PIL image
+        draw.text(position, char, font=font, fill=(0, 0, 0, 255))
+
+        # Convert the PIL image to a format OpenCV can work with (BGR mode)
+        cv_image = np.array(pil_image)
+        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGBA2BGRA)  # Preserve transparency
+
+        return cv_image
+
+    files = os.listdir(folder_path)
+    for i in files:
+        font_path = os.path.join(folder_path, i)
+        img = draw_character_cv2(characters, font_path, 50, 400, 400)
+
+        # Display the result with OpenCV
+        cv2.imshow('Character', img)
+        key = cv2.waitKey(0)
+
+        if key == ord('1'):
+            os.remove(font_path)
+            print(f"File {i} has been removed.")
+        elif key == ord('0'):
+            print(f"File {i} was not removed.")
+
+        cv2.destroyAllWindows()
+
+def get_balanced_text_generator(alphabet, string_length=(5, 10), lowercase=False, bias_chars = '', bias_factor = 0.3):
     '''
     Generates batches of sentences ensuring perfectly balanced symbol distribution.
     Args:
@@ -97,7 +112,13 @@ def get_balanced_text_generator(alphabet, string_length=(5, 10), lowercase=False
         total_generated = sum(symbol_counter.values())
 
         # Adjust probabilities to balance the frequency of each symbol
-        weights = {char: total_generated - count + 1 for char, count in symbol_counter.items()}
+        weights = {}
+        for char in alphabet:
+            # Apply the bias factor for specified characters
+            weight = total_generated - symbol_counter[char] + 1
+            if char in bias_chars:
+                weight += bias_factor
+            weights[char] = weight
         total_weight = sum(weights.values())
         probabilities = [weights[char] / total_weight for char in alphabet]
 
@@ -157,24 +178,11 @@ def filter_wrong_samples(generator, white_pixel_threshold=0.05):
             print(f"Skipping sample due to low white pixel ratio ({white_pixel_ratio:.2%})")'''
 
 def generate_drawing_imgs(image_gen_params, backgrounds):
-
-    def choose_background_no_overlap(text_img, background_list):
-        """Choose a random background from the list that doesn't overlap with the white text.
-        
-        Args:
-        text_img: A binary image where the text is white (255) on black (0).
-        background_list: A list of background images.
-        
-        Returns:
-        The chosen background image that doesn't overlap with the white text.
-        """
-        def check_overlap(text_img, background_img):
+    def check_overlap(text_img, background_img):
             """Check if there is an overlap between black pixels of the background and white pixels of the text.
-            
             Args:
             text_img: A binary image where the text is white (255) on black (0).
             background_img: A grayscale or RGB background image.
-            
             Returns:
             bool: True if there is an overlap, False otherwise.
             """
@@ -189,21 +197,13 @@ def generate_drawing_imgs(image_gen_params, backgrounds):
                 background_gray = background_img
 
             # Identify where the text image has white pixels (text pixels)
-            text_mask = text_img == 0
-
+            text_mask = text_img < 127
             # Identify where the background has black pixels (0 value)
-            background_black_mask = background_gray == 0
-            
+            background_black_mask = background_gray < 127
             # Check if any black background pixels overlap with the white text pixels
             overlap = np.any(np.logical_and(text_mask, background_black_mask))
 
             return overlap
-
-        # Try picking a background that does not overlap
-        for _ in range(len(background_list)*2):  # Limit the number of retries to avoid infinite loops
-            background_img = random.choice(background_list)
-            if not check_overlap(text_img, background_img):
-                return background_img
 
     def apply_text_on_background(text_img, text_binary, background_img):
         """Apply the text image over the background, assuming no overlap."""
@@ -217,7 +217,7 @@ def generate_drawing_imgs(image_gen_params, backgrounds):
         result[text_mask] = inverted_text_img[text_mask]
 
         return result
-
+    
     def compact_bounding_box(box_group):
         from edocr2.tools.ocr_pipelines import group_polygons_by_proximity
         box_groups = []
@@ -235,24 +235,72 @@ def generate_drawing_imgs(image_gen_params, backgrounds):
 
         return dummy_box_groups
     
+    def reposition(text_img, lines):
+        new_lines = []
+        for line in lines:
+            x_coords = []
+            y_coords = []
+            for li in line:
+                x_coords.extend([li[0][0][0], li[0][1][0], li[0][2][0], li[0][3][0]])  # [x1, x2, x3, x4]
+                y_coords.extend([li[0][0][1], li[0][1][1], li[0][2][1], li[0][3][1]])  # [y1, y2, y3, y4]
+            
+            x_min = int(min(x_coords))
+            y_min = int(min(y_coords))
+            x_max = int(max(x_coords))
+            y_max = int(max(y_coords))
+            
+            # Crop the text region using the bounding box coordinates
+            cropped_text = text_img[y_min:y_max, x_min:x_max]
+            x_offset = random.randint(10, text_img.shape[1] - x_max + x_min - 10)
+            y_offset = random.randint(10, text_img.shape[0] - y_max + y_min - 10)
+            
+            text_img[y_offset:y_offset+ cropped_text.shape[0], x_offset:x_offset+ cropped_text.shape[1]] = cropped_text
+            text_img[y_min:y_max, x_min:x_max] = 0
+            new_line = []
+            for li in line:
+                new_li = []
+                for coord in li[0]:  # Iterate through each (x, y) pair in the bounding box
+                    new_x = coord[0] - x_min + x_offset
+                    new_y = coord[1] - y_min + y_offset
+                    new_li.append([new_x, new_y])
+                new_line.append([new_li, li[1]])
+            new_lines.append(new_line)
+
+        return text_img, new_lines
+    
     from edocr2.keras_ocr import data_generation
-    """Generate images with text on a background, ensuring no overlap."""
+
     while True:
-        # Create image generators for training and validation
-        image_generator_train = data_generation.get_image_generator(**image_gen_params)
-        text_image, lines = next(image_generator_train)
+        backg = random.choice(backgrounds)
+        # Initialize the final image as the background
+        image = backg.copy()
+        lines = []  # Store the bounding boxes for all text images
 
-        # Convert text image to binary
-        _, binary_text_img = cv2.threshold(cv2.cvtColor(text_image, cv2.COLOR_BGR2GRAY), 1, 255, cv2.THRESH_BINARY_INV)
+        # Randomly choose a number of text images to place (between 1 and 5, for example)
+        num_images = random.randint(1, 5)
 
-        # Choose a background that doesn't overlap with the text
-        background = choose_background_no_overlap(binary_text_img, backgrounds)
-        if background is not None:
-            # Apply the text image on the background
-            image = apply_text_on_background(text_image, binary_text_img, background)
-            lines = compact_bounding_box(lines)
-            yield image, lines
+        for _ in range(num_images):
+            for _ in range(100):  # Retry mechanism if overlap occurs
+                image_gen = data_generation.get_image_generator(**image_gen_params)
+                text_img, new_lines = next(image_gen)
+                text_img, new_lines = reposition(text_img, new_lines)
+                _, binary_text_img = cv2.threshold(cv2.cvtColor(text_img, cv2.COLOR_BGR2GRAY), 1, 255, cv2.THRESH_BINARY_INV)
+                # Check if the new text image overlaps with the current image
+                
+                if not check_overlap(binary_text_img, image):
+                    # If no overlap, apply the text image onto the background
+                    image = apply_text_on_background(text_img, binary_text_img, image)
 
+                    # Compact the bounding boxes and add them to the list
+                    new_lines = compact_bounding_box(new_lines)
+                    lines.extend(new_lines)
+                    break  # Exit the loop once the image has been successfully placed
+            else:
+                continue  # Retry if overlap occurred
+
+        # Yield the final image with the applied text and the compacted bounding boxes
+        yield image, lines
+    
 def save_recog_samples(alphabet, fonts, samples, recognizer, save_path = './recog_samples'):
     """Generate and save a few samples along with their labels.
     
@@ -310,7 +358,7 @@ def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'
     
     os.makedirs(save_path, exist_ok=True)
 
-    text_generator = get_balanced_text_generator(alphabet, (5, 10))
+    text_generator = get_balanced_text_generator(alphabet, (1, 10))
     height, width = 640, 640
     backgrounds = get_backgrounds(height, width, samples)
 
@@ -319,9 +367,9 @@ def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'
     'width': width,
     'text_generator': text_generator,
     'font_groups': {alphabet: fonts},  # Use all fonts
-    'font_size': (20, 80),
-    'margin': 25,
-    'rotationZ': (-90, 120)
+    'font_size': (25, 50),
+    'margin': 20,
+    'rotationZ': (-90, 90)
     }
 
     image_gen = generate_drawing_imgs(image_gen_params, backgrounds)
@@ -352,7 +400,7 @@ def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'
 
 ############ Synthetic Training ################################################
 
-def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, batch_size = 256, epochs = 10, string_length = (5, 10), basepath = os.getcwd(), val_split = 0.2):
+def train_synth_recognizer(alphabet, fonts, pretrained = None, bias_char = '', samples = 1000, batch_size = 256, epochs = 10, string_length = (5, 10), basepath = os.getcwd(), val_split = 0.2):
     '''Starts the training of the recognizer on generated data.
     Args:
     alphabet: string of characters
@@ -365,10 +413,11 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, b
     '''
     import tensorflow as tf
     from edocr2 import keras_ocr
+    current_time = time.localtime(time.time())
     basepath = os.path.join(basepath,
-    f'recognizer_{time.gmtime(time.time()).tm_hour}'+f'_{time.gmtime(time.time()).tm_min}')
+    f'recognizer_{current_time.tm_hour}_{current_time.tm_min}')
 
-    text_generator = get_balanced_text_generator(alphabet, string_length)
+    text_generator = get_balanced_text_generator(alphabet, string_length, bias_chars=bias_char)
 
     image_gen_params = {
     'height': 256,
@@ -420,11 +469,12 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, samples = 1000, b
     )
     return basepath
 
-def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, batch_size = 8, epochs = 10, string_length = (2, 10), basepath = os.getcwd(), val_split = 0.2):
+def train_synth_detector(alphabet, fonts, pretrained = None, samples = 100, batch_size = 8, epochs = 1, string_length = (1, 10), basepath = os.getcwd(), val_split = 0.2):
     import tensorflow as tf
     from edocr2 import keras_ocr
+    current_time = time.localtime(time.time())
     basepath = os.path.join(basepath,
-    f'detector_{time.gmtime(time.time()).tm_hour}'+f'_{time.gmtime(time.time()).tm_min}')
+    f'detector_{current_time.tm_hour}_{current_time.tm_min}')
 
     text_generator = get_balanced_text_generator(alphabet, string_length)
     height, width = 640, 640
@@ -435,9 +485,9 @@ def train_synth_detector(alphabet, fonts, pretrained = None, samples = 1000, bat
     'width': width,
     'text_generator': text_generator,
     'font_groups': {alphabet: fonts},  # Use all fonts
-    'font_size': (20, 80),
-    'margin': 25,
-    'rotationZ': (-90, 120)
+    'font_size': (25, 50),
+    'margin': 0,
+    'rotationZ': (-90, 90)
     }
 
     # Create image generators for training and validation
@@ -478,12 +528,89 @@ def train_detector(data_path, batch_size = 8, epochs = 10, val_split = 0.2, pret
     basepath = os.path.join(basepath, f'detector_{time.gmtime(time.time()).tm_hour}_{time.gmtime(time.time()).tm_min}')
 
 ############ Testing ##########################################################
+def compare_characters(label, prediction):
+    # Count occurrences of each character in label and prediction
+    label_chars = Counter(label)    # e.g., {'1': 1, '4': 1, '0': 1}
+    pred_chars = Counter(prediction)  # e.g., {'4': 1, '0': 1}
+
+    correct_count = 0
+
+    # Iterate over characters in the prediction
+    for char in pred_chars:
+        if char in label_chars:
+            # Add the minimum of occurrences in both to correct_count
+            correct_count += min(pred_chars[char], label_chars[char])
+    return correct_count
+
+def get_cer(
+    preds: typing.Union[str, typing.List[str]],
+    target: typing.Union[str, typing.List[str]],
+    ) -> float:
+    
+    def edit_distance(prediction_tokens: typing.List[str], reference_tokens: typing.List[str]) -> int:
+        """ Standard dynamic programming algorithm to compute the Levenshtein Edit Distance Algorithm
+
+        Args:
+            prediction_tokens: A tokenized predicted sentence
+            reference_tokens: A tokenized reference sentence
+        Returns:
+            Edit distance between the predicted sentence and the reference sentence
+        """
+        # Initialize a matrix to store the edit distances
+        dp = [[0] * (len(reference_tokens) + 1) for _ in range(len(prediction_tokens) + 1)]
+
+        # Fill the first row and column with the number of insertions needed
+        for i in range(len(prediction_tokens) + 1):
+            dp[i][0] = i
+        
+        for j in range(len(reference_tokens) + 1):
+            dp[0][j] = j
+
+        # Iterate through the prediction and reference tokens
+        for i, p_tok in enumerate(prediction_tokens):
+            for j, r_tok in enumerate(reference_tokens):
+                # If the tokens are the same, the edit distance is the same as the previous entry
+                if p_tok == r_tok:
+                    dp[i+1][j+1] = dp[i][j]
+                # If the tokens are different, the edit distance is the minimum of the previous entries plus 1
+                else:
+                    dp[i+1][j+1] = min(dp[i][j+1], dp[i+1][j], dp[i][j]) + 1
+
+        # Return the final entry in the matrix as the edit distance     
+        return dp[-1][-1]
+    """ Update the cer score with the current set of references and predictions.
+
+    Args:
+        preds (typing.Union[str, typing.List[str]]): list of predicted sentences
+        target (typing.Union[str, typing.List[str]]): list of target words
+
+    Returns:
+        Character error rate score
+    """
+    if isinstance(preds, str):
+        preds = [preds]
+    if isinstance(target, str):
+        target = [target]
+
+    total, errors = 0, 0
+    for pred_tokens, tgt_tokens in zip(preds, target):
+        errors += edit_distance(list(pred_tokens), list(tgt_tokens))
+        total += len(tgt_tokens)
+
+    if total == 0:
+        return 0.0
+
+    cer = errors / total
+
+    return cer
+
 def test_recog(test_path, recognizer):
 
     # To track ground truth and predictions for word-level accuracy
     total_chars = 0  # Total number of characters in all labels
+    pred_chars = 0 
+    cer = []
     correct_chars = 0  # Total number of correctly predicted characters
-
     samples = len(os.listdir(test_path)) / 2
     
     for i in range(1, int(samples) + 1):
@@ -493,19 +620,23 @@ def test_recog(test_path, recognizer):
         pred = recognizer.recognize(image = img)
         print(f'ground truth: {label} | prediction: {pred}')
 
-        correct_in_sample = sum(1 for x, y in zip(label, pred) if x == y)
+        correct_in_sample = compare_characters(label, pred)
         correct_chars += correct_in_sample
         total_chars += len(label)
 
-        sample_char_accuracy = (correct_in_sample / len(label)) * 100 if len(label) > 0 else 0
-        print(f"Sample character accuracy: {sample_char_accuracy:.2f}%")
+        sample_char_recall = (correct_in_sample / len(label)) * 100 if len(label) > 0 else 0
+        sample_cer = get_cer(pred, label) * 100
+        cer.append(sample_cer)
+        pred_chars += len(pred)
+        print(f"Sample character Recall: {sample_char_recall:.2f}%")
+        print(f"Sample character CER: {sample_cer:.2f}%")
 
     # Calculate and print overall character-level accuracy
-    overall_char_accuracy = (correct_chars / total_chars) * 100 if total_chars > 0 else 0
-    print(f"\nTotal Samples: {samples}")
-    print(f"Total characters: {total_chars}")
-    print(f"Correctly predicted characters: {correct_chars}")
-    print(f"Overall character-level accuracy: {overall_char_accuracy:.2f}%")
+    overall_char_recall = (correct_chars / pred_chars) * 100 if pred_chars > 0 else 0
+    overall_cer = np.mean(cer) * 100
+
+    print(f"Character Recall: {overall_char_recall:.2f}%")
+    print(f"CER: {overall_cer:.2f}%")
 
 def test_detect(test_path, detector, show_img = False):
 

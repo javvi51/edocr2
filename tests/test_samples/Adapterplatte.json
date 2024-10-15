@@ -1,0 +1,308 @@
+{
+  "version": "0.4.10",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "other_info",
+      "text": "",
+      "points": [
+        [
+          1268.0,
+          1981.0
+        ],
+        [
+          1578.0,
+          2036.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "200,00",
+      "text": "",
+      "points": [
+        [
+          2136.0,
+          740.0
+        ],
+        [
+          2301.0,
+          792.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "175,00",
+      "text": "",
+      "points": [
+        [
+          2141.0,
+          878.0
+        ],
+        [
+          2298.0,
+          929.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "160,10",
+      "text": "",
+      "points": [
+        [
+          2142.0,
+          961.0
+        ],
+        [
+          2298.0,
+          1010.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "39,90",
+      "text": "",
+      "points": [
+        [
+          2168.0,
+          1617.0
+        ],
+        [
+          2298.0,
+          1667.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "25,00",
+      "text": "",
+      "points": [
+        [
+          2168.0,
+          1700.0
+        ],
+        [
+          2298.0,
+          1747.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "0",
+      "text": "",
+      "points": [
+        [
+          2266.0,
+          1837.0
+        ],
+        [
+          2298.0,
+          1882.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "0",
+      "text": "",
+      "points": [
+        [
+          2476.0,
+          2047.0
+        ],
+        [
+          2522.0,
+          2077.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "25,00",
+      "text": "",
+      "points": [
+        [
+          2612.0,
+          2045.0
+        ],
+        [
+          2663.0,
+          2179.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "39,90",
+      "text": "",
+      "points": [
+        [
+          2695.0,
+          2045.0
+        ],
+        [
+          2744.0,
+          2178.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "160,10",
+      "text": "",
+      "points": [
+        [
+          3350.0,
+          2047.0
+        ],
+        [
+          3404.0,
+          2203.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "175,00",
+      "text": "",
+      "points": [
+        [
+          3433.0,
+          2046.0
+        ],
+        [
+          3483.0,
+          2202.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "200,00",
+      "text": "",
+      "points": [
+        [
+          3572.0,
+          2046.0
+        ],
+        [
+          3620.0,
+          2208.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "4 x ⌀ 11,00 20,00\n⌀18,00 12,00",
+      "text": "",
+      "points": [
+        [
+          3861.0,
+          1603.0
+        ],
+        [
+          4377.0,
+          1719.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "R10,00",
+      "text": "",
+      "points": [
+        [
+          3609.0,
+          677.0
+        ],
+        [
+          3642.0,
+          709.0
+        ],
+        [
+          3754.0,
+          596.0
+        ],
+        [
+          3721.0,
+          563.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "polygon",
+      "flags": {}
+    },
+    {
+      "label": "20,00",
+      "text": "",
+      "points": [
+        [
+          1104.0,
+          602.0
+        ],
+        [
+          1236.0,
+          650.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    },
+    {
+      "label": "other_info",
+      "text": "",
+      "points": [
+        [
+          3854.0,
+          1267.0
+        ],
+        [
+          4615.0,
+          1322.0
+        ]
+      ],
+      "group_id": null,
+      "shape_type": "rectangle",
+      "flags": {}
+    }
+  ],
+  "imagePath": "Adapterplatte.jpg",
+  "imageData": null,
+  "imageHeight": 3250,
+  "imageWidth": 5778,
+  "text": ""
+}

@@ -2,7 +2,7 @@ import cv2, math, os
 import numpy as np
 
 ###################### Tables and Others Pipeline #################################
-def ocr_img_cv2(image_cv2, language = None):
+def ocr_img_cv2(image_cv2, language = None, psm = 11):
     """Recognize text in an OpenCV image using pytesseract and return both text and positions.
     
     Args:
@@ -17,9 +17,9 @@ def ocr_img_cv2(image_cv2, language = None):
     
     # Custom configuration to recognize a more complete set of characters
     if language:
-        custom_config = f'--psm 11 -l {language}'
+        custom_config = f'--psm {psm} -l {language}'
     else:
-        custom_config = r'--psm 11'
+        custom_config = f'--psm {psm}'
 
     # Perform OCR and get bounding box details
     ocr_data = pytesseract.image_to_data(img_rgb, config=custom_config, output_type=pytesseract.Output.DICT)
@@ -44,6 +44,9 @@ def ocr_img_cv2(image_cv2, language = None):
 def ocr_tables(tables, process_img, language = None):
     results = []
     updated_tables = []
+
+    tables = sorted(tables, key=lambda cluster_dict: next(iter(cluster_dict)).y * 10000 + next(iter(cluster_dict)).x, reverse=True)
+
     for table in tables:
         for b in table:
             img = process_img[b.y : b.y + b.h, b.x : b.x + b.w][:]
@@ -56,7 +59,18 @@ def ocr_tables(tables, process_img, language = None):
                     r['top'] += b.y
                 results.append(result)
                 updated_tables.append(table)
-    return results, updated_tables
+    for table in updated_tables:
+        for b in table:
+            process_img[b.y : b.y + b.h, b.x : b.x + b.w][:] = 255
+    
+    return results, updated_tables, process_img
+
+def llm_table(tables, llm, img):
+    from edocr2.tools.llm_tools import call_vision_infoblock
+    for b in tables[0]:
+        tab_img = img[b.y : b.y + b.h, b.x : b.x + b.w][:]
+    llm_dict = call_vision_infoblock(tab_img, model=llm[0], processor=llm[1], device = llm[2], query= llm[3])
+    return llm_dict
 
 ##################### GDT Pipeline #####################################
 
@@ -148,8 +162,11 @@ def ocr_gdt(img, gdt_boxes, recognizer):
                     pred = recognize_gdt(img, sorted_block, recognizer)
                     updated_gdts.append(block)
                     results.append([pred, (sorted_block[0].x, sorted_block[0].y)])
-    
-    return results, updated_gdts
+    for gdt in updated_gdts:
+        for g in gdt.values():
+            for b in g:
+                img[b.y - 5 : b.y + b.h + 10, b.x - 5 : b.x + b.w + 10][:] = 255
+    return results, updated_gdts, img
 
 ##################### Dimension Pipeline ###############################
 
@@ -162,13 +179,13 @@ class Pipeline:
         max_size: The maximum single-side dimension of images for
             inference.
     """
-    def __init__(self, detector, recognizer, max_char = 10, scale = 2, max_size = 2048, language = 'eng'):
+    def __init__(self, detector, recognizer, alphabet_dimensions, scale = 2, max_size = 1024, language = 'eng'):
         self.scale = scale
         self.detector = detector
         self.recognizer = recognizer
         self.max_size = max_size
-        self.max_char = max_char
         self.language = language
+        self.alphabet_dimensions = alphabet_dimensions
 
     def detect(self, img, detection_kwargs = None):
         """Run the pipeline on one or multiples images.
@@ -191,6 +208,7 @@ class Pipeline:
         
         new_size = (int(img.shape[1]* scale), int(img.shape[0]* scale))
         img = cv2.resize(img, new_size, interpolation=cv2.INTER_LINEAR)
+
         box_groups = self.detector.detect(images=[img], **detection_kwargs)
         box_groups = [
             adjust_boxes(boxes=boxes, boxes_format="boxes", scale=1 / scale)
@@ -235,16 +253,20 @@ class Pipeline:
             return text
         return ''
 
+    def dimension_criteria(self, pred):
+        allowed_exceptions = set('''?—!@~;¢«#_%\&€$»[]§¥©‘"'£<*“”I|ZNOXi \n''')
+        return all(char in set(self.alphabet_dimensions) or char in allowed_exceptions for char in pred)
+                    
     def recognize_dimensions(self, box_groups, img):
         predictions=[]
+        predictions_pyt=[]
         other_info=[]
-        recognition_kwargs={}
         for box in box_groups:
             rect = cv2.minAreaRect(box)
             angle = get_box_angle(box)
             angle = adjust_angle(angle)
-            w=int(max(rect[1]) + 5)
-            h=int(min(rect[1]) + 2)
+            w=int(max(rect[1]) + 15)
+            h=int(min(rect[1]) + 5)
             img_croped = subimage(img, rect[0], angle, w, h)  
             img_croped,thresh=clean_h_lines(img_croped)
             gray = cv2.cvtColor(img_croped, cv2.COLOR_BGR2GRAY)
@@ -254,31 +276,29 @@ class Pipeline:
             if len(cnts)==1:
                 #pred=self.recognizer.recognize(image=cv2.rotate(img_croped,cv2.ROTATE_90_COUNTERCLOCKWISE))
                 img_croped=cv2.rotate(img_croped,cv2.ROTATE_90_COUNTERCLOCKWISE)
-                box_groups=[np.array([[[0,0],[h,0],[h,w],[0,w]]])]
-                pred=self.recognizer.recognize_from_boxes(images=[img_croped],box_groups=box_groups,**recognition_kwargs)[0][0]
+                pred = self.recognizer.recognize(image=img_croped)
                 if pred.isdigit():
                     predictions.append((pred, box))
-            elif 1<len(cnts)<self.max_char:
-                arr=check_tolerances(img_croped)
-                pred=''
-                for img_ in arr:
-                    h,w,_=img_.shape
-                    box_groups=[np.array([[[0,0],[w,0],[w,h],[0,h]]])]
-                    pred_ = self.recognizer.recognize_from_boxes(images=[img_],box_groups=box_groups,**recognition_kwargs)[0][0]
-                    if pred_=='':
-                        pred=self.recognizer.recognize(image=img_croped)+' '
-                        break
-                    else:
-                        pred+=pred_+' '
-                pred=pred[:-1]
-                if any(char.isdigit() for char in pred):
-                    predictions.append((pred, box))
             else:
-                pred = self.ocr_the_rest(img_croped)
-                other_info.append((pred, box))
-        return predictions, other_info
+                pred_pyt = self.ocr_the_rest(img_croped)
+                if self.dimension_criteria(pred_pyt) or pred_pyt == '':
+                    arr=check_tolerances(img_croped)
+                    pred=''
+                    for img_ in arr:
+                        pred_ = self.recognizer.recognize(image=img_) + ' '
+                        pred += pred_
+                    if len(pred) - len(arr) < 3: #Error handling for tolerance detection
+                        pred = self.recognizer.recognize(image=img_croped) + ' '
+                    if any (char.isdigit() for char in pred):
+                        predictions.append((pred[:-1], box))
+                    else:
+                        other_info.append((pred[:-1], box))
+                    predictions_pyt.append((pred_pyt, box))
+                else:
+                    other_info.append((pred_pyt, box))
+        return predictions, other_info, predictions_pyt
 
-    def ocr_img_patches(self, img, patches, ol = 0.05, cluster_t = 20):
+    def ocr_img_patches(self, img, ol = 0.05, cluster_t = 20):
 
         '''
         This functions split the original images into patches and send it to the text detector. 
@@ -288,17 +308,18 @@ class Pipeline:
         ol: overlap between patches
         cluster_t: threshold for grouping
         '''
+        patches = (int(img.shape[1] / self.max_size + 2), int(img.shape[0] / self.max_size + 2))
 
-        a_x = (1 - ol) / (patches[0]) # % of img covered in a patch (horizontal stride)
-        b_x = a_x + ol # Size of horizontal patch in % of img
-        a_y = (1 - ol) / (patches[1]) # % of img covered in a patch (vertical stride)
-        b_y = a_y + ol # Size of horizontal patch in % of img
+        a_x = int((1 - ol) / (patches[0]) * img.shape[1]) # % of img covered in a patch (horizontal stride)
+        b_x = a_x + int(ol* img.shape[1]) # Size of horizontal patch in % of img
+        a_y = int((1 - ol) / (patches[1]) * img.shape[0]) # % of img covered in a patch (vertical stride)
+        b_y = a_y + int(ol * img.shape[0]) # Size of horizontal patch in % of img
         box_groups = []
 
         for i in range(0, patches[0]):
             for j in range(0, patches[1]):
-                offset = (int(a_x * i * img.shape[1]), int(a_y * j * img.shape[0]))
-                patch_boundary = (int((i * a_x + b_x) * img.shape[1]), int((j * a_y + b_y) * img.shape[0]))
+                offset = (a_x * i, a_y * j)
+                patch_boundary = (i * a_x + b_x, j * a_y + b_y)
                 img_patch = img[offset[1] : patch_boundary[1], 
                                 offset[0] : patch_boundary[0]]
                 if img_not_empty(img_patch, 100):
@@ -311,8 +332,8 @@ class Pipeline:
         box_groups = group_polygons_by_proximity(box_groups, eps = cluster_t)
         new_group = [box for box in box_groups]
         print('Detection finished. Performing recognition...')
-        dimensions, other_info = self.recognize_dimensions(np.int32(new_group), np.array(img))
-        return dimensions, other_info
+        dimensions, other_info, dimensions_pyt = self.recognize_dimensions(np.int32(new_group), np.array(img))
+        return dimensions, other_info, dimensions_pyt
 
 def group_polygons_by_proximity(polygons, eps=50):
         from shapely.geometry import Polygon, MultiPolygon
@@ -490,7 +511,7 @@ def subimage(image, center, theta, width, height):
     shape = ( image.shape[1], image.shape[0] ) # cv2.warpAffine expects shape in (length, height)
     matrix = cv2.getRotationMatrix2D( center=center, angle=theta, scale=1 )
     image = cv2.warpAffine( src=image, M=matrix, dsize=shape )
-    x, y = (int( center[0] - width/2  ),int( center[1] - height/2 ))
+    x, y = (int( center[0] - width/2 ),int( center[1] - height/2 ))
     x2, y2 = x + width, y + height
 
     if x < 0: x=0
@@ -500,24 +521,29 @@ def subimage(image, center, theta, width, height):
 
     image = image[ y:y2, x:x2 ]
     
-    
     return image
 
 def clean_h_lines(img_croped):
     gray = cv2.cvtColor(img_croped, cv2.COLOR_BGR2GRAY) #Convert img to grayscale
     _,thresh = cv2.threshold(gray,127,255,cv2.THRESH_BINARY_INV) #Threshold to binary image
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (int(img_croped.shape[1]),1))
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (int(img_croped.shape[1]*0.9)-15,1))
     detect_horizontal = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
     cnts = cv2.findContours(detect_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
-        cv2.drawContours(img_croped, [c], -1, (255,255,255), 2)
+        img_croped = cv2.drawContours(img_croped, [c], -1, (255,255,255), 2)
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1,int(img_croped.shape[1]*0.9)-5))
+    detect_vertical = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+    cnts = cv2.findContours(detect_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+    for c in cnts:
+        img_croped = cv2.drawContours(img_croped, [c], -1, (255,255,255), 3)
     return img_croped, thresh
 
-def ocr_dimensions(img, detector, recognizer, cluster_thres = 20, patches = (5, 4), max_char = 10, language = 'eng', backg_save = False):
+def ocr_dimensions(img, detector, recognizer, alphabet_dim, cluster_thres = 20, language = 'eng', max_img_size = 2048, backg_save = False):
     
-    pipeline = Pipeline(recognizer=recognizer, detector=detector, max_char = max_char, language=language)
-    dimensions, other_info = pipeline.ocr_img_patches(img, patches, 0.05, cluster_thres)
+    pipeline = Pipeline(recognizer=recognizer, detector=detector, alphabet_dimensions=alphabet_dim, max_size= max_img_size, language=language)
+    dimensions, other_info, dim_pyt = pipeline.ocr_img_patches(img, 0.05, cluster_thres)
 
     process_img = img.copy()
     for dim in dimensions:
@@ -542,4 +568,4 @@ def ocr_dimensions(img, detector, recognizer, cluster_thres = 20, patches = (5, 
         image_filename = os.path.join(backg_path , f'backg_{i + 1}.png')
         cv2.imwrite(image_filename, process_img)
         
-    return dimensions, other_info, process_img
+    return dimensions, other_info, process_img, dim_pyt

@@ -1,5 +1,6 @@
 pdf2image
 opencv-python
+pandas
 validators
 imgaug
 scikit-image
@@ -11,3 +12,5 @@ editdistance
 pyclipper
 python-dotenv
 accelerate
+tf-keras
+sentence-transformers

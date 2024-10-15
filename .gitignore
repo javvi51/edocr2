@@ -5,4 +5,7 @@
 /recog_samples/
 /detect_samples/
 .env
-/tests/test_samples/Washers/
+/tests/Washers/
+/shit/
+/tests/4132864.jpg
+/__pycache__/

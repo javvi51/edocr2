@@ -116,16 +116,86 @@ def find_rectangles(img, binary_thres = 127):
 
     return img_boxes, rect_list, hierarchy
 
-def find_frame(rect_list):
+def find_frame(img, frame_thres):
+    from scipy.signal import find_peaks
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.bilateralFilter(gray, 11, 61, 39)
+    edges = cv2.Canny(blurred, 0, 255)
+    kernel = np.ones((5, 5), np.uint8) 
+    edges = cv2.dilate(edges, kernel, iterations=1 )
 
-    largest_rect = rect_list[0]  # Assume the first rect is the largest initially
+    v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1,20))
+    h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (20,1))
 
-    for rect in rect_list[1:]:  # Start checking from the second element
-        if rect.w * rect.h > largest_rect.w * largest_rect.h:
-            largest_rect = rect
+    v_morphed = cv2.morphologyEx(edges, cv2.MORPH_OPEN, v_kernel, iterations=2)
+    v_morphed = cv2.dilate(v_morphed, None)
+    h_morphed = cv2.morphologyEx(edges, cv2.MORPH_OPEN, h_kernel, iterations=2)
+    h_morphed = cv2.dilate(h_morphed, None)
+
+    v_acc = cv2.reduce(v_morphed, 0, cv2.REDUCE_SUM, dtype=cv2.CV_32S)
+    h_acc = cv2.reduce(h_morphed, 1, cv2.REDUCE_SUM, dtype=cv2.CV_32S)
+
+    def smooth(y, box_pts):
+        box = np.ones(box_pts)/box_pts
+        y_smooth = np.convolve(y, box, mode='same')
+        return y_smooth
+
+    s_v_acc = smooth(v_acc[0,:],9) 
+    s_h_acc = smooth(h_acc[:,0],9) 
+
+    v_peaks, v_props = find_peaks(s_v_acc, 0.8*np.max(np.max(s_v_acc)))
+    h_peaks, h_props = find_peaks(s_h_acc, 0.8*np.max(np.max(s_h_acc)))
+    tmp = img.copy()
+    for peak_index in v_peaks:
+        cv2.line(tmp, (peak_index, 0), (peak_index, img.shape[0]), (255, 0, 0),2)
+    for peak_index in h_peaks:
+        cv2.line(tmp, (0, peak_index), (img.shape[1], peak_index), (0, 0, 255),2)
     
-    return largest_rect
-    
+    '''cv2.imshow('boxes', tmp)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()'''
+    # Ensure we have enough peaks to define a box
+    if len(v_peaks) < 2 or len(h_peaks) < 2:
+        return None  # Not enough peaks to define a frame
+
+    # Image dimensions
+    img_height, img_width = img.shape[:2]
+
+    # Threshold size for the frame (width and height must be larger than this)
+    min_frame_width = frame_thres * img_width
+    min_frame_height = frame_thres * img_height
+
+    # Initialize a variable to store the best frame found
+    best_frame = None
+    best_frame_area = 0  # Used to track the innermost frame
+
+    # Find the innermost frame larger than the threshold
+    for i in range(len(v_peaks)):
+        for j in range(i + 1, len(v_peaks)):  # Compare all vertical peaks
+            for k in range(len(h_peaks)):
+                for l in range(k + 1, len(h_peaks)):  # Compare all horizontal peaks
+                    left = v_peaks[i]
+                    right = v_peaks[j]
+                    top = h_peaks[k]
+                    bottom = h_peaks[l]
+
+                    # Calculate the width and height of the current frame
+                    frame_width = right - left
+                    frame_height = bottom - top
+
+                    # Check if the frame is larger than the threshold
+                    if frame_width >= min_frame_width and frame_height >= min_frame_height:
+                        # Calculate the area of the current frame
+                        frame_area = frame_width * frame_height
+
+                        # Check if this frame is the innermost one (smallest area that satisfies threshold)
+                        if frame_area > best_frame_area:
+                            best_frame_area = frame_area
+                            best_frame = Rect('frame', left, top, right - left, bottom - top)
+
+    # Return the best (innermost) frame found
+    return best_frame
+
 def touching_box(cl, cl_fire, thres=1.1):
     '''returns true if cl is adjacent to cl_fire, a threshold ratio is applied to scale up cl
     Args:
@@ -211,33 +281,19 @@ def cluster_criteria(clusters, GDT_thres):
 
     return gdt, tab
 
-def segment_img(img, frame = True, GDT_thres = 0.02, binary_thres = 127):
-    img_boxes, rect_list, hierarchy  = find_rectangles(img, binary_thres= binary_thres)
+def segment_img(img, frame_thres = 0.85, autoframe = True, GDT_thres = 0.02, binary_thres = 127):
+    
+    #Find rectangles
+    img_boxes, rect_list, _  = find_rectangles(img, binary_thres= binary_thres)
     #print_hierarchy(hierarchy)
-
-    if frame:
-        framed_list=[]
-        frame = find_frame(rect_list)
-        if frame.h *frame.w > 0.85* (img.shape[0] * img.shape[1]):
-            for rect in rect_list:
-                if is_contained(rect, frame):
-                    framed_list.append(rect)
-            rect_list = framed_list
-        else:
-            frame = False
+    frame = False
+    if autoframe:
+        frame = find_frame(img, frame_thres)
 
     clusters = find_clusters(rect_list)
 
     gdt_boxes, tables = cluster_criteria(clusters, GDT_thres * img.shape[0] * img.shape[1])
-    process_img = img.copy()
 
-    for table in tables:
-        for b in table:
-            process_img[b.y : b.y + b.h, b.x : b.x + b.w][:] = 255
-    
-    for gdt in gdt_boxes:
-        for g in gdt.values():
-            for b in g:
-                process_img[b.y - 5 : b.y + b.h + 10, b.x - 5 : b.x + b.w + 10][:] = 255
-    
-    return img_boxes, process_img, frame, gdt_boxes, tables
+    if not frame:
+        frame = Rect('frame', int(img.shape[1] * (1-frame_thres)/2), int(img.shape[0] * (1-frame_thres)/2), int(img.shape[1] * frame_thres), int(img.shape[0] * frame_thres))
+    return img_boxes, frame, gdt_boxes, tables

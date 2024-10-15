@@ -3,9 +3,9 @@ import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
            
-file_path = 'tests/test_samples/4132864.jpg'
+file_path = 'tests/test_samples/Adapterplatte.jpg'
 
-if file_path.endswith('.pdf'):
+if file_path.endswith('.pdf') or file_path.endswith(".PDF"):
     img = convert_from_path(file_path)
     img = np.array(img[0])
 else:
@@ -27,7 +27,7 @@ language = 'swe'
 #region ############ Segmentation Task ####################
 start_time = time.time()
 
-img_boxes, process_img, frame, gdt_boxes, tables  = tools.layer_segm.segment_img(img, frame = True, GDT_thres = 0.02, binary_thres=127)
+img_boxes, frame, gdt_boxes, tables  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
 
 end_time = time.time()
 print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\033[0m")
@@ -35,7 +35,7 @@ print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\
 
 #region ######## Set Session ##############################
 start_time = time.time()
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
+#os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 import tensorflow as tf
 from edocr2.keras_ocr.recognition import Recognizer
 from edocr2.keras_ocr.detection import Detector
@@ -49,7 +49,7 @@ for gpu in gpus:
 # Load models
 gdt_model = 'edocr2/models/recognizer_gdts.keras'
 dim_model = 'edocr2/models/recognizer_dimensions.keras'
-detector_model = None #'edocr2/models/detector_8_31.keras'
+detector_model = None #'edocr2/models/detector_12_46.keras'
 
 recognizer_gdt = None
 if gdt_boxes:
@@ -67,9 +67,17 @@ end_time = time.time()
 print(f"\033[1;33mLoading session took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
+#region ############ OCR Tables ###########################
+start_time = time.time()
+
+table_results, updated_tables, process_img= tools.ocr_pipelines.ocr_tables(tables, img, language)
+end_time = time.time()
+print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
+#endregion
+
 #region ############ OCR GD&T #############################
 start_time = time.time()
-gdt_results, updated_gdt_boxes = tools.ocr_pipelines.ocr_gdt(img, gdt_boxes, recognizer_gdt)
+gdt_results, updated_gdt_boxes, process_img = tools.ocr_pipelines.ocr_gdt(process_img, gdt_boxes, recognizer_gdt)
 end_time = time.time()
 print(f"\033[1;33mOCR in GD&T took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
@@ -80,19 +88,10 @@ start_time = time.time()
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 
-dimensions, other_info, process_img = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, cluster_thres=20, patches=(5, 3), max_char = 15, language=language, backg_save=False)
+dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dimensions, cluster_thres=20, max_img_size=1024, language=language, backg_save=False)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
-#endregion
-
-#region ############ OCR Tables ###########################
-start_time = time.time()
-
-table_results, updated_tables = tools.ocr_pipelines.ocr_tables(tables, img, language)
-
-end_time = time.time()
-print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
 #region ########### Output ################################

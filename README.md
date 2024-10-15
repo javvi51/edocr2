@@ -67,3 +67,7 @@
      pip install tesseract
      pip install pytesseract
      ```
+2. Install **faiss**: (If want to perform RAG)
+   ```bash
+     conda install -c conda-forge faiss-gpu
+     ```
