@@ -56,7 +56,7 @@
 2. Install **Tesseract OCR** and **pytesseract**:
    - Install the necessary dependencies:
      ```bash
-     sudo apt-get install libleptonica-dev tesseract-ocr libtesseract-dev python3-pil tesseract-ocr-eng tesseract-ocr-script-latn
+     sudo apt-get install libleptonica-dev tesseract-ocr libtesseract-dev python3-pil tesseract-ocr-eng tesseract-ocr-script-latn tesseract-ocr-nor
      ```
    - For swedish:
      ```bash

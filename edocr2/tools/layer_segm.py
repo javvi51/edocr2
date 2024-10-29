@@ -83,6 +83,23 @@ def print_hierarchy(rectangles, level=0):
         print("  " * level + f"{rect.name}")
         print_hierarchy(rect.children, level + 1)
 
+def is_box(approx):
+    if len(approx) == 4 and 88<angle(approx[1],approx[0],approx[2])<92 and 88<angle(approx[3],approx[0],approx[2])<92: #if cnt can be approx with only 4 points, it is a 4 side polygon
+        dx1 = abs(approx[0][0][0] - approx[1][0][0])  # Difference in x for the first side
+        dy1 = abs(approx[0][0][1] - approx[1][0][1])  # Difference in y for the first side
+        dx2 = abs(approx[1][0][0] - approx[2][0][0])  # Difference in x for the second side
+        dy2 = abs(approx[1][0][1] - approx[2][0][1])  # Difference in y for the second side
+        
+        # Set a threshold to ensure the sides are aligned to the image axes
+        threshold = 10 # Allowable deviation from horizontal or vertical alignment
+
+        if (dx1 < threshold or dy1 < threshold) and (dx2 < threshold or dy2 < threshold):
+            return True
+        else:
+            return False
+    else:
+        return False
+
 def find_rectangles(img, binary_thres = 127):
     '''Returns a list with rectangles from an image
     Args: img: the image (mechanical engineering drawing)
@@ -102,7 +119,7 @@ def find_rectangles(img, binary_thres = 127):
     for cnt in contours:
         x1,y1 = cnt[0][0] #Top-left corner
         approx = cv2.approxPolyDP(cnt, 0.01*cv2.arcLength(cnt, True), True) #Approach cnt to polygons with multiple points
-        if len(approx) == 4 and 88<angle(approx[1],approx[0],approx[2])<92 and 88<angle(approx[3],approx[0],approx[2])<92: #if cnt can be approx with only 4 points, it is a 4 side polygon
+        if is_box(approx): #if cnt can be approx with only 4 points, it is a 4 side polygon
             x, y, w, h = cv2.boundingRect(cnt) #get rectangle information
             if w*h>1000: #Clean very small rectangles
                 cv2.putText(img_boxes, 'rect_'+str(r), (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 127, 83), 2) #Add rectangle tag
@@ -145,53 +162,39 @@ def find_frame(img, frame_thres):
 
     v_peaks, v_props = find_peaks(s_v_acc, 0.8*np.max(np.max(s_v_acc)))
     h_peaks, h_props = find_peaks(s_h_acc, 0.8*np.max(np.max(s_h_acc)))
-    tmp = img.copy()
+    '''tmp = img.copy()
     for peak_index in v_peaks:
         cv2.line(tmp, (peak_index, 0), (peak_index, img.shape[0]), (255, 0, 0),2)
     for peak_index in h_peaks:
         cv2.line(tmp, (0, peak_index), (img.shape[1], peak_index), (0, 0, 255),2)
     
-    '''cv2.imshow('boxes', tmp)
+    cv2.imshow('boxes', tmp)
     cv2.waitKey(0)
     cv2.destroyAllWindows()'''
     # Ensure we have enough peaks to define a box
     if len(v_peaks) < 2 or len(h_peaks) < 2:
         return None  # Not enough peaks to define a frame
 
-    # Image dimensions
-    img_height, img_width = img.shape[:2]
-
-    # Threshold size for the frame (width and height must be larger than this)
-    min_frame_width = frame_thres * img_width
-    min_frame_height = frame_thres * img_height
-
-    # Initialize a variable to store the best frame found
-    best_frame = None
-    best_frame_area = 0  # Used to track the innermost frame
-
-    # Find the innermost frame larger than the threshold
-    for i in range(len(v_peaks)):
-        for j in range(i + 1, len(v_peaks)):  # Compare all vertical peaks
-            for k in range(len(h_peaks)):
-                for l in range(k + 1, len(h_peaks)):  # Compare all horizontal peaks
-                    left = v_peaks[i]
-                    right = v_peaks[j]
-                    top = h_peaks[k]
-                    bottom = h_peaks[l]
-
-                    # Calculate the width and height of the current frame
-                    frame_width = right - left
-                    frame_height = bottom - top
-
-                    # Check if the frame is larger than the threshold
-                    if frame_width >= min_frame_width and frame_height >= min_frame_height:
-                        # Calculate the area of the current frame
-                        frame_area = frame_width * frame_height
-
-                        # Check if this frame is the innermost one (smallest area that satisfies threshold)
-                        if frame_area > best_frame_area:
-                            best_frame_area = frame_area
-                            best_frame = Rect('frame', left, top, right - left, bottom - top)
+    min_frame_tup = (img.shape[0] * frame_thres, img.shape[1] * frame_thres) #(y,x)
+    
+    def find_best_peaks(peaks, v_h): #v_h is a int= 0 or 1 to identify if we are talking vertical or horizontal peaks
+        min_peaks = np.array([peak for peak in peaks if peak < img.shape[v_h] / 2])
+        max_peaks = np.array([peak for peak in peaks if peak > img.shape[v_h] / 2])
+        min_frame = min_frame_tup[v_h]
+        diff_matrix = np.subtract.outer(max_peaks, min_peaks)
+        valid_diff_mask = (diff_matrix > min_frame)
+        if np.any(valid_diff_mask):
+            min_diff = np.min(diff_matrix[valid_diff_mask])
+            # Find the index of the minimum difference
+            min_diff_index = np.where(diff_matrix == min_diff)
+            max_idx, min_idx = min_diff_index[0][0], min_diff_index[1][0]
+            max_p = max_peaks[max_idx]
+            min_p = min_peaks[min_idx]
+            return max_p, min_p
+    
+    bottom, top = find_best_peaks(h_peaks, 0)
+    right, left = find_best_peaks(v_peaks, 1)
+    best_frame = Rect('frame', left, top, right - left, bottom - top)
 
     # Return the best (innermost) frame found
     return best_frame
@@ -249,6 +252,7 @@ def find_clusters(rect_list):
             new_list.append(rect)
 
     clusters = []
+    singles = []
     while len(new_list):
         rect = new_list[0]
         if rect.state == 'green':
@@ -266,20 +270,41 @@ def find_clusters(rect_list):
                 # Create a new Rect object that covers all rectangles
                 covering_rect = Rect(name='cluster_'+ str(len(clusters)), x=min_x, y=min_y, w=width, h=height)
                 clusters.append({covering_rect:cluster})
+            else:
+                singles.append(cluster[0])
             new_list = [b for b in new_list if b not in cluster]
-    return clusters
+    return clusters, singles
 
-def cluster_criteria(clusters, GDT_thres):
-    gdt = []
-    tab = []
+def cluster_criteria(clusters, singles,  GDT_thres):
+    gdt, tab, dim = [], [], []
     for cl in clusters:
         for k_cl in cl:
             if k_cl.w * k_cl.h > GDT_thres:
                 tab.append(cl)
             else:
                 gdt.append(cl)
+    for sl in singles:
+        is_contained = False
+        for cl in clusters:
+            # Calculate the bounding box of the entire cluster
+            cluster_min_x = min(k_cl.x for k_cl in cl)
+            cluster_max_x = max(k_cl.x + k_cl.w for k_cl in cl)
+            cluster_min_y = min(k_cl.y for k_cl in cl)
+            cluster_max_y = max(k_cl.y + k_cl.h for k_cl in cl)
 
-    return gdt, tab
+            # Check if the single rect (sl) is fully contained within the cluster's bounding box
+            if (cluster_min_x <= sl.x <= cluster_max_x and
+                cluster_min_y <= sl.y <= cluster_max_y and
+                cluster_min_x <= sl.x + sl.w <= cluster_max_x and
+                cluster_min_y <= sl.y + sl.h <= cluster_max_y):
+                is_contained = True
+                break  # No need to check further if it’s already contained
+
+        # If not contained in any cluster, append to dim
+        if not is_contained:
+            if sl.w * sl.h < GDT_thres / 4:
+                dim.append(sl)
+    return gdt, tab, dim
 
 def segment_img(img, frame_thres = 0.85, autoframe = True, GDT_thres = 0.02, binary_thres = 127):
     
@@ -290,10 +315,10 @@ def segment_img(img, frame_thres = 0.85, autoframe = True, GDT_thres = 0.02, bin
     if autoframe:
         frame = find_frame(img, frame_thres)
 
-    clusters = find_clusters(rect_list)
+    clusters, singles = find_clusters(rect_list)
 
-    gdt_boxes, tables = cluster_criteria(clusters, GDT_thres * img.shape[0] * img.shape[1])
+    gdt_boxes, tables, dim_boxes = cluster_criteria(clusters, singles, GDT_thres * img.shape[0] * img.shape[1])
 
     if not frame:
         frame = Rect('frame', int(img.shape[1] * (1-frame_thres)/2), int(img.shape[0] * (1-frame_thres)/2), int(img.shape[1] * frame_thres), int(img.shape[0] * frame_thres))
-    return img_boxes, frame, gdt_boxes, tables
+    return img_boxes, frame, gdt_boxes, tables, dim_boxes

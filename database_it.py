@@ -8,12 +8,6 @@ import ocr_it
 # 2  | 'draw_1' | 'Steel'          | 'Table'         | 1200  | 1450  | 'QuenVL'    | "Material"             |
 
 ###### We want to use all tensorflow utilities, then move to pytorch for the LLM tools. ######
-GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
-FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
-Extra = '(),.+-±:/°"⌀'
-
-alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
-alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
 
 #region Session Loading
 start_time = time.time()
@@ -25,11 +19,14 @@ for gpu in gpus:
 from edocr2.keras_ocr.recognition import Recognizer
 from edocr2.keras_ocr.detection import Detector
 
-recognizer_gdt = Recognizer(alphabet=alphabet_gdts)
-recognizer_gdt.model.load_weights('edocr2/models/recognizer_gdts.keras')
+gdt_model = 'edocr2/models/recognizer_gdts.keras'
+recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model))
+recognizer_gdt.model.load_weights(gdt_model)
 
-recognizer_dim = Recognizer(alphabet=alphabet_dimensions)
-recognizer_dim.model.load_weights('edocr2/models/recognizer_14_59.keras')
+dim_model = 'edocr2/models/recognizer_dimensions_2.keras'
+alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
+recognizer_dim = Recognizer(alphabet=alphabet_dim)
+recognizer_dim.model.load_weights(dim_model)
 
 detector = Detector()
 #detector.model.load_weights('edocr2/models/detector_12_46.keras')
@@ -59,7 +56,7 @@ kwargs = {
     'recognizer_gdt': recognizer_gdt, #MUST: A Tuple with (gdt alphabet, model path)
     'GDT_thres': 0.02, #Maximum porcentage of the image area to consider a cluster of rectangles a GD&T box
     #Dimensions
-    'dimension_tuple': (detector, recognizer_dim, alphabet_dimensions), #MUST: A Tuple with (detector, dimension alphabet, model path)
+    'dimension_tuple': (detector, recognizer_dim, alphabet_dim), #MUST: A Tuple with (detector, dimension alphabet, model path)
     'cluster_thres': 20, #Minimum distance in pixels between two text predictions to consider the same text box
     'max_img_size': 1024, #Max size after applying scale for the img patch, bigger, better prediction, but more computationally expensive
     #Output
@@ -89,7 +86,7 @@ for file_path in file_paths:
         })
         # Append the information to the DataFrame
         ocr_results_df = pd.concat([ocr_results_df, new_row], ignore_index=True)
-
+ocr_results_df.to_csv(os.path.join(kwargs['output_path'], 'dataframe.csv'), index=False)
 
 ###### Now we complete with table information #######################
 query = ['name', 'material', 'part number', 'finishing']

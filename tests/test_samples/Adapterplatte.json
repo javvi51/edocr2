@@ -105,40 +105,6 @@
       "flags": {}
     },
     {
-      "label": "0",
-      "text": "",
-      "points": [
-        [
-          2266.0,
-          1837.0
-        ],
-        [
-          2298.0,
-          1882.0
-        ]
-      ],
-      "group_id": null,
-      "shape_type": "rectangle",
-      "flags": {}
-    },
-    {
-      "label": "0",
-      "text": "",
-      "points": [
-        [
-          2476.0,
-          2047.0
-        ],
-        [
-          2522.0,
-          2077.0
-        ]
-      ],
-      "group_id": null,
-      "shape_type": "rectangle",
-      "flags": {}
-    },
-    {
       "label": "25,00",
       "text": "",
       "points": [
@@ -224,7 +190,7 @@
       "flags": {}
     },
     {
-      "label": "4 x ⌀ 11,00 20,00\n⌀18,00 12,00",
+      "label": "other_info",
       "text": "",
       "points": [
         [

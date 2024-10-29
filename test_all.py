@@ -93,12 +93,12 @@ def compute_metrics(filename, predictions, mask_img, iou_thres = 0.2):
                 best_iou = iou
                 best_pred = pred
         
-        if best_iou >= iou_thres:
-            #Detection
-            correct_detections += 1
-            detection_iou_scores.append(best_iou)
-            #Recognition
-            if gt[0] != 'other_info' and best_pred[0] != 'other_info':
+        if best_iou >= iou_thres: 
+            if gt[0] != 'other_info' and best_pred[0] != 'other_info': #If dimension detected and correct acc. to gt
+                #Detection
+                correct_detections += 1
+                detection_iou_scores.append(best_iou)
+                #Recognition
                 label = gt[0]
                 recog = best_pred[0]
                 cum_gt += label
@@ -107,8 +107,10 @@ def compute_metrics(filename, predictions, mask_img, iou_thres = 0.2):
                 total_chars += len(label)
                 correct_chars += correct_char
 
-    precision = correct_detections / len(predictions) if len(predictions) > 0 else 0
-    recall = correct_detections / len(ground_truth) if len(ground_truth) > 0 else 0
+    gt_dim = [gt for gt in ground_truth if gt[0] != 'other_info']
+    predictions_dim = [pr for pr in predictions if pr[0] != 'other_info']
+    precision = correct_detections / len(predictions_dim) if len(predictions_dim) > 0 else 0
+    recall = correct_detections / len(gt_dim) if len(gt_dim) > 0 else 0
     average_iou = np.mean(detection_iou_scores)
     dim_metrics = {'precision':precision, "recall": recall, 'IoU': average_iou}
     char_recall = (correct_chars / total_chars) * 100 if total_chars > 0 else 0
@@ -118,20 +120,11 @@ def compute_metrics(filename, predictions, mask_img, iou_thres = 0.2):
         box = gt[1]
         pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])]).astype(np.int64)
         mask_img = cv2.polylines(mask_img, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
-    return dim_metrics, recog_metrics, mask_img
+    return dim_metrics, recog_metrics, mask_img, [correct_detections, len(predictions_dim), len(gt_dim), detection_iou_scores, correct_chars, total_chars, cum_pred, cum_gt]
 
 folder_path = 'tests/test_samples/'
 #process_json_labels(folder_path)
-
-#region Alphabet definition #################
-GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
-FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
-Extra = '(),.+-±:/°"⌀'
-
-alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
-alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
 language = 'eng'
-#endregion
 
 #region Set Session ##############################
 start_time = time.time()
@@ -140,7 +133,6 @@ import tensorflow as tf
 from edocr2.keras_ocr.recognition import Recognizer
 from edocr2.keras_ocr.detection import Detector
 
-
 # Configure GPU memory growth
 gpus = tf.config.list_physical_devices('GPU')
 for gpu in gpus:
@@ -148,13 +140,14 @@ for gpu in gpus:
 
 # Load models
 gdt_model = 'edocr2/models/recognizer_gdts.keras'
-dim_model = 'edocr2/models/recognizer_dimensions.keras'
+dim_model = 'edocr2/models/recognizer_dimensions_2.keras'
 detector_model = None #'edocr2/models/detector_12_46.keras'
 
-recognizer_gdt = Recognizer(alphabet=alphabet_gdts)
+recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model))
 recognizer_gdt.model.load_weights(gdt_model)
 
-recognizer_dim = Recognizer(alphabet=alphabet_dimensions)
+alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
+recognizer_dim = Recognizer(alphabet=alphabet_dim)
 recognizer_dim.model.load_weights(dim_model)
 detector = Detector()
 
@@ -164,6 +157,13 @@ if detector_model:
 end_time = time.time()   
 print(f"\033[1;33mLoading session took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
+
+precision =[]
+recall=[]
+iou=[]
+char_recall=[]
+cer=[]
+metrics_tools=[]
 
 for file in os.listdir(folder_path):
     if file.endswith(".jpg") or file.endswith(".pdf") or file.endswith(".PDF"):
@@ -177,17 +177,18 @@ for file in os.listdir(folder_path):
         filename = os.path.splitext(os.path.basename(file))[0]
         
         #Segmentation
-        img_boxes, frame, gdt_boxes, tables  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
+        img_boxes, frame, gdt_boxes, tables, dim_boxes  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
         
         #Tables
-        table_results, updated_tables, process_img= tools.ocr_pipelines.ocr_tables(tables, img, language)
+        process_img = img.copy()
+        table_results, updated_tables, process_img= tools.ocr_pipelines.ocr_tables(tables, process_img , language)
         
         #G&DTs
         gdt_results, updated_gdt_boxes, process_img = tools.ocr_pipelines.ocr_gdt(process_img, gdt_boxes, recognizer_gdt)
         
         #Dimensions
         process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
-        dimensions, other_info, process_img, dim_pyt = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dimensions, cluster_thres=20, max_img_size=1024, language=language, backg_save=False)
+        dimensions, other_info, process_img, dim_pyt = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, dim_boxes, cluster_thres=20, max_img_size=1240, language=language, backg_save=False)
         
         #Masking
         mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, tables, dimensions, frame, other_info)
@@ -208,12 +209,50 @@ for file in os.listdir(folder_path):
             update_dimensions.append(['other_info', pts])      
         
         #Metrics computation
-        dim_metrics, recog_metrics, mask_img = compute_metrics(os.path.join(folder_path, filename + '.csv'), update_dimensions, mask_img)
+        dim_metrics, recog_metrics, mask_img, m_t = compute_metrics(os.path.join(folder_path, filename + '.csv'), update_dimensions, mask_img)
+        #Dimensions
+        for d in dimensions:
+            print(d[0])
+        #Other info
+        print('---------Other info:----------')
+        for o in other_info:
+            print(o[0])
         print(dim_metrics)
         print(recog_metrics)
-
+        precision.append(dim_metrics['precision'])
+        recall.append(dim_metrics['recall'])
+        iou.append(dim_metrics['IoU'])
+        char_recall.append(recog_metrics['char_recall'])
+        cer.append(recog_metrics['CER'])
+        metrics_tools.append(m_t)
         #Display
         cv2.imshow('boxes', mask_img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+print('------------------')
+print('Micro Average Results')
+print('Precision:', np.mean(precision)*100, '%') 
+print('Recall:', np.mean(recall)*100, '%') 
+print('IoU', np.mean(iou)*100, '%') 
+print('Character Recall', np.mean(char_recall)) 
+print('CER', np.mean(cer)*100, '%')
+
+
+print('------------------')
+print('Macro Average Results')
+correct_detections = sum(row[0] for row in metrics_tools)
+predictions = sum(row[1] for row in metrics_tools)
+print('Precision:', correct_detections/predictions*100, '%')
+gt = sum(row[2] for row in metrics_tools)
+print('Recall:', correct_detections/gt*100, '%')
+iou = [item for row in metrics_tools for item in row[3]]
+print('IoU:', np.mean(iou)*100, '%') 
+correct_char = sum(row[4] for row in metrics_tools)
+total_chars = sum(row[5] for row in metrics_tools)
+print('Character Recall:', correct_char/total_chars*100, '%')
+cum_pred = ''.join(row[6] for row in metrics_tools)
+cum_gt = ''.join(row[7] for row in metrics_tools)
+print('CER:',tools.train_tools.get_cer(cum_pred, cum_gt)*100, '%')
+
 

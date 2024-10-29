@@ -3,23 +3,6 @@
   "flags": {},
   "shapes": [
     {
-      "label": "0",
-      "text": "",
-      "points": [
-        [
-          822.3880597014925,
-          390.29850746268653
-        ],
-        [
-          842.5373134328357,
-          417.16417910447757
-        ]
-      ],
-      "group_id": null,
-      "shape_type": "rectangle",
-      "flags": {}
-    },
-    {
       "label": "12,5",
       "text": "",
       "points": [
@@ -315,24 +298,7 @@
       "group_id": null,
       "shape_type": "polygon",
       "flags": {}
-    },
-    {
-      "label": "other_info",
-      "text": "",
-      "points": [
-        [
-          1055.9701492537313,
-          1716.4179104477612
-        ],
-        [
-          1133.5820895522388,
-          1753.731343283582
-        ]
-      ],
-      "group_id": null,
-      "shape_type": "rectangle",
-      "flags": {}
-    }
+    }    
   ],
   "imagePath": "LIU0010.jpg",
   "imageData": null,

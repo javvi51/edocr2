@@ -19,7 +19,7 @@ def ocr_drawing(file_path, recognizer_gdt, dimension_tuple, #Must have
     #Layer Segmentation
     times = []
     start_time = time.time()
-    _, frame, gdt_boxes, tables = tools.layer_segm.segment_img(img, autoframe = autoframe, frame_thres=frame_thres, GDT_thres = GDT_thres, binary_thres= binary_thres)
+    _, frame, gdt_boxes, tables, dim_boxes = tools.layer_segm.segment_img(img, autoframe = autoframe, frame_thres=frame_thres, GDT_thres = GDT_thres, binary_thres= binary_thres)
     end_time = time.time()
     times.append(end_time-start_time)
     print('Segmentation Done')
@@ -38,8 +38,8 @@ def ocr_drawing(file_path, recognizer_gdt, dimension_tuple, #Must have
     if frame:
         process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
     
-    dimensions, other_info, process_img, _ = tools.ocr_pipelines.ocr_dimensions(process_img, dimension_tuple[0], dimension_tuple[1], dimension_tuple[2], 
-                                                     max_img_size=max_img_size, cluster_thres=cluster_thres, backg_save=backg_save)
+    dimensions, other_info, process_img, _ = tools.ocr_pipelines.ocr_dimensions(process_img, dimension_tuple[0], dimension_tuple[1], dimension_tuple[2],
+                                                                                frame, dim_boxes, max_img_size=max_img_size, cluster_thres=cluster_thres, backg_save=backg_save)
     end_time = time.time()
     times.append(end_time-sum(times)-start_time)
     print('Prediction on dimensions and extra information Done')
@@ -62,24 +62,20 @@ def ocr_drawing(file_path, recognizer_gdt, dimension_tuple, #Must have
     return {'tab': table_results, 'gdts': gdt_results, 'dim': dimensions, 'other': other_info}, times, updated_tables, img
 
 def ocr_one_drawing(file_path = '/home/javvi51/edocr2/tests/test_samples/4132864.jpg'):
-    
-    GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
-    FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
-    Extra = '(),.+-±:/°"⌀'
-
-    alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
-    alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
 
     #Session Loading
     start_time = time.time()
     from edocr2.keras_ocr.recognition import Recognizer
     from edocr2.keras_ocr.detection import Detector
 
-    recognizer_gdt = Recognizer(alphabet=alphabet_gdts)
-    recognizer_gdt.model.load_weights('edocr2/models/recognizer_gdts.keras')
+    gdt_model = 'edocr2/models/recognizer_gdts.keras'
+    recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model))
+    recognizer_gdt.model.load_weights(gdt_model)
 
-    recognizer_dim = Recognizer(alphabet=alphabet_dimensions)
-    recognizer_dim.model.load_weights('edocr2/models/recognizer_dimensions.keras')
+    dim_model = 'edocr2/models/recognizer_dimensions_2.keras'
+    alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
+    recognizer_dim = Recognizer(alphabet=alphabet_dim)
+    recognizer_dim.model.load_weights(dim_model)
 
     detector = Detector()
     #detector.model.load_weights('edocr2/models/detector_8_31.keras')
@@ -103,7 +99,7 @@ def ocr_one_drawing(file_path = '/home/javvi51/edocr2/tests/test_samples/4132864
         'recognizer_gdt': recognizer_gdt, #MUST: A Tuple with (gdt alphabet, model path)
         'GDT_thres': 0.02, #Maximum porcentage of the image area to consider a cluster of rectangles a GD&T box
         #Dimensions
-        'dimension_tuple': (detector, recognizer_dim, alphabet_dimensions), #MUST: A Tuple with (detector, dimension alphabet, model path)
+        'dimension_tuple': (detector, recognizer_dim, alphabet_dim), #MUST: A Tuple with (detector, dimension alphabet, model path)
         'cluster_thres': 20, #Minimum distance in pixels between two text predictions to consider the same text box
         'max_char': 15, #Max number of characters to consider a text prediction a dimension, otherwise -> other info
         'max_img_size': 2048, #Max size after applying scale for the img patch, bigger, better prediction and higher times
@@ -134,23 +130,19 @@ def ocr_one_drawing(file_path = '/home/javvi51/edocr2/tests/test_samples/4132864
 
 def ocr_folder(folder_path = '/home/javvi51/edocr2/tests/test_samples/Washers'):
        
-    GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
-    FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
-    Extra = '(),.+-±:/°"⌀'
-
-    alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
-    alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
-
     #Session Loading
     start_time = time.time()
     from edocr2.keras_ocr.recognition import Recognizer
     from edocr2.keras_ocr.detection import Detector
 
-    recognizer_gdt = Recognizer(alphabet=alphabet_gdts)
-    recognizer_gdt.model.load_weights('edocr2/models/recognizer_gdts.keras')
+    gdt_model = 'edocr2/models/recognizer_gdts.keras'
+    recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model))
+    recognizer_gdt.model.load_weights(gdt_model)
 
-    recognizer_dim = Recognizer(alphabet=alphabet_dimensions)
-    recognizer_dim.model.load_weights('edocr2/models/recognizer_dimensions.keras')
+    dim_model = 'edocr2/models/recognizer_dimensions_2.keras'
+    alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
+    recognizer_dim = Recognizer(alphabet=alphabet_dim)
+    recognizer_dim.model.load_weights(dim_model)
 
     detector = Detector()
     #detector.model.load_weights('path/to/custom/detector')
@@ -179,7 +171,7 @@ def ocr_folder(folder_path = '/home/javvi51/edocr2/tests/test_samples/Washers'):
             'recognizer_gdt': recognizer_gdt, #MUST: A Tuple with (gdt alphabet, model path)
             'GDT_thres': 0.02, #Maximum porcentage of the image area to consider a cluster of rectangles a GD&T box
             #Dimensions
-            'dimension_tuple': (detector, recognizer_dim, alphabet_dimensions), #MUST: A Tuple with (detector, dimension alphabet, model path)
+            'dimension_tuple': (detector, recognizer_dim, alphabet_dim), #MUST: A Tuple with (detector, dimension alphabet, model path)
             'cluster_thres': 20, #Minimum distance in pixels between two text predictions to consider the same text box
             'max_char': 15, #Max number of characters to consider a text prediction a dimension, otherwise -> other info
             'max_img_size': 1024, #Max size after applying scale for the img patch, bigger, better prediction, but more computationally expensive

@@ -210,23 +210,6 @@
       "text": "",
       "points": [
         [
-          1217.0,
-          1465.0
-        ],
-        [
-          1303.0,
-          1501.0
-        ]
-      ],
-      "group_id": null,
-      "shape_type": "rectangle",
-      "flags": {}
-    },
-    {
-      "label": "other_info",
-      "text": "",
-      "points": [
-        [
           775.0,
           1760.0
         ],

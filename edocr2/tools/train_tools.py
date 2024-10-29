@@ -454,7 +454,8 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, bias_char = '', s
 
     recognition_train_generator = recognizer.get_batch_generator(recog_img_gen_train, batch_size)
     recognition_val_generator = recognizer.get_batch_generator(recog_img_gen_val, batch_size)
-
+    with open(f'{basepath}.txt', 'w') as file:
+        file.write(alphabet)
     recognizer.training_model.fit(
         recognition_train_generator,
         epochs=epochs,
@@ -515,17 +516,6 @@ def train_synth_detector(alphabet, fonts, pretrained = None, samples = 100, batc
         batch_size=batch_size
     )
     return basepath
-
-############ Standard Training ################################################
-def train_detector(data_path, batch_size = 8, epochs = 10, val_split = 0.2, pretrained = None):
-    import tensorflow as tf
-    from sklearn.model_selection import train_test_split
-    import os
-    import time
-    import math
-
-    # Set basepath for saving logs and model
-    basepath = os.path.join(basepath, f'detector_{time.gmtime(time.time()).tm_hour}_{time.gmtime(time.time()).tm_min}')
 
 ############ Testing ##########################################################
 def compare_characters(label, prediction):
@@ -633,7 +623,7 @@ def test_recog(test_path, recognizer):
 
     # Calculate and print overall character-level accuracy
     overall_char_recall = (correct_chars / pred_chars) * 100 if pred_chars > 0 else 0
-    overall_cer = np.mean(cer) * 100
+    overall_cer = np.mean(cer)
 
     print(f"Character Recall: {overall_char_recall:.2f}%")
     print(f"CER: {overall_cer:.2f}%")
@@ -713,4 +703,3 @@ def calculate_iou(predicted_polygon, ground_truth_polygon):
     iou = intersection_area / union_area
     return iou
 
-#TODO: train_detect function on given dataset

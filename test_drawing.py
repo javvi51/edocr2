@@ -3,7 +3,7 @@ import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
            
-file_path = 'tests/test_samples/Adapterplatte.jpg'
+file_path = 'tests/Washers/534208701.pdf'
 
 if file_path.endswith('.pdf') or file_path.endswith(".PDF"):
     img = convert_from_path(file_path)
@@ -13,22 +13,12 @@ else:
 
 filename = os.path.splitext(os.path.basename(file_path))[0]
 output_path = os.path.join('.', filename)
-
-#region ############# Alphabet definition #################
-GDT_symbols = '⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰'
-FCF_symbols = 'ⒺⒻⓁⓂⓅⓈⓉⓊ'
-Extra = '(),.+-±:/°"⌀'
-
-alphabet_gdts = string.digits + ',.⌀ABCD' + GDT_symbols + FCF_symbols
-alphabet_dimensions = string.digits + 'AaBCDRGHhMmnx' + Extra
 language = 'swe'
-#endregion
 
 #region ############ Segmentation Task ####################
 start_time = time.time()
 
-img_boxes, frame, gdt_boxes, tables  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
-
+img_boxes, frame, gdt_boxes, tables, dim_boxes  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
 end_time = time.time()
 print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
@@ -48,15 +38,15 @@ for gpu in gpus:
 
 # Load models
 gdt_model = 'edocr2/models/recognizer_gdts.keras'
-dim_model = 'edocr2/models/recognizer_dimensions.keras'
+dim_model = 'edocr2/models/recognizer_dimensions_2.keras'
 detector_model = None #'edocr2/models/detector_12_46.keras'
 
 recognizer_gdt = None
 if gdt_boxes:
-    recognizer_gdt = Recognizer(alphabet=alphabet_gdts)
+    recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model))
     recognizer_gdt.model.load_weights(gdt_model)
-
-recognizer_dim = Recognizer(alphabet=alphabet_dimensions)
+alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
+recognizer_dim = Recognizer(alphabet=alphabet_dim)
 recognizer_dim.model.load_weights(dim_model)
 detector = Detector()
 
@@ -69,8 +59,8 @@ print(f"\033[1;33mLoading session took {end_time - start_time:.6f} seconds to ru
 
 #region ############ OCR Tables ###########################
 start_time = time.time()
-
-table_results, updated_tables, process_img= tools.ocr_pipelines.ocr_tables(tables, img, language)
+process_img = img.copy()
+table_results, updated_tables, process_img= tools.ocr_pipelines.ocr_tables(tables, process_img, language)
 end_time = time.time()
 print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
@@ -88,7 +78,7 @@ start_time = time.time()
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 
-dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dimensions, cluster_thres=20, max_img_size=1024, language=language, backg_save=False)
+dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1024, language=language, backg_save=False)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
@@ -103,7 +93,7 @@ table_results, gdt_results, dimensions, other_info = tools.output_tools.process_
 end_time = time.time()
 print(f"\033[1;33mRaw output generation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
-
+print(dimensions)
 ###################################################
 cv2.imshow('boxes', mask_img)
 cv2.waitKey(0)
