@@ -3,7 +3,7 @@ import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
            
-file_path = 'tests/Washers/534208701.pdf'
+file_path = 'tests/test_samples/example_dwg.png'
 
 if file_path.endswith('.pdf') or file_path.endswith(".PDF"):
     img = convert_from_path(file_path)
@@ -20,6 +20,7 @@ start_time = time.time()
 
 img_boxes, frame, gdt_boxes, tables, dim_boxes  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
 end_time = time.time()
+#cv2.imwrite('boxes.png', img_boxes)
 print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
@@ -29,7 +30,6 @@ start_time = time.time()
 import tensorflow as tf
 from edocr2.keras_ocr.recognition import Recognizer
 from edocr2.keras_ocr.detection import Detector
-
 
 # Configure GPU memory growth
 gpus = tf.config.list_physical_devices('GPU')
@@ -77,11 +77,21 @@ start_time = time.time()
 
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
-
-dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1024, language=language, backg_save=False)
+dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1240, language=language, backg_save=False)
 
 end_time = time.time()
 print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
+#endregion
+
+#region ############# Qwen for tables #####################
+
+qwen = False
+if qwen:
+    model, processor = tools.llm_tools.load_VL(model_name = "Qwen/Qwen2-VL-7B-Instruct")
+    device = "cuda:1"
+    query = ['Tolerance', 'material', 'Surface finish', 'weight']
+    llm_tab_qwen = tools.llm_tools.llm_table(tables, llm = (model, processor), img = img, device = device, query=query)
+    print(llm_tab_qwen)
 #endregion
 
 #region ########### Output ################################
@@ -93,7 +103,8 @@ table_results, gdt_results, dimensions, other_info = tools.output_tools.process_
 end_time = time.time()
 print(f"\033[1;33mRaw output generation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
-print(dimensions)
+
+
 ###################################################
 cv2.imshow('boxes', mask_img)
 cv2.waitKey(0)

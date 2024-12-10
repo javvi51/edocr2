@@ -12,7 +12,7 @@ def mask_box(mask_img, points, color):
 
 def mask_frame(mask_img, cl, tables, color):
     # Blend the original image with the specified color
-    blend = 0.6
+    blend = 0.5
     img_color = cv2.addWeighted(mask_img, blend, np.full_like(mask_img, color), 1 - blend, 0)
 
     # Create a mask with a white rectangle in the specified region
@@ -34,16 +34,16 @@ def mask_img(img, gdt_boxes, tables, dimensions, frame, other_info):
     for table in tables:
         for tab in table:
             pts = np.array([(tab.x, tab.y), (tab.x+tab.w, tab.y), (tab.x+tab.w, tab.y+tab.h),(tab.x,tab.y+tab.h)], np.int32)
-            mask_img = mask_box(mask_img, pts, (180, 220, 250))
+            mask_img = mask_box(mask_img, pts, (212,242,247))
     
     for gdt in gdt_boxes:
         for g in gdt.values():
             for tab in g:
                 pts = np.array([(tab.x, tab.y), (tab.x+tab.w, tab.y), (tab.x+tab.w, tab.y+tab.h),(tab.x,tab.y+tab.h)], np.int32)
-                mask_img = mask_box(mask_img, pts, (94, 204, 243))
+                mask_img = mask_box(mask_img, pts, (68,136,179))
 
     if frame:
-        mask_img = mask_frame(mask_img, frame, tables, (167, 234, 82))
+        mask_img = mask_frame(mask_img, frame, tables, (100*2, 78*2, 73*2))
         offset = (frame.x, frame.y)
     else:
         offset = (0, 0)
@@ -51,12 +51,12 @@ def mask_img(img, gdt_boxes, tables, dimensions, frame, other_info):
     for dim in dimensions:
         box = dim[1]
         pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
-        mask_img = mask_box(mask_img, pts, (93, 206, 175))
+        mask_img = mask_box(mask_img, pts, (110,185,187))
     
     for info in other_info:
         box = info[1]
         pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
-        mask_img = mask_box(mask_img, pts, (150, 147, 113))
+        mask_img = mask_box(mask_img, pts, (128,102,90))
 
    
     return mask_img

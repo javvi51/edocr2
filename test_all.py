@@ -1,4 +1,4 @@
-import json, os, glob, cv2, string, time, csv, math
+import json, os, glob, cv2, time, csv, math
 import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
@@ -123,7 +123,7 @@ def compute_metrics(filename, predictions, mask_img, iou_thres = 0.2):
     return dim_metrics, recog_metrics, mask_img, [correct_detections, len(predictions_dim), len(gt_dim), detection_iou_scores, correct_chars, total_chars, cum_pred, cum_gt]
 
 folder_path = 'tests/test_samples/'
-#process_json_labels(folder_path)
+process_json_labels(folder_path)
 language = 'eng'
 
 #region Set Session ##############################
@@ -164,9 +164,11 @@ iou=[]
 char_recall=[]
 cer=[]
 metrics_tools=[]
+times = []
 
 for file in os.listdir(folder_path):
-    if file.endswith(".jpg") or file.endswith(".pdf") or file.endswith(".PDF"):
+    if file.endswith(".jpg") or file.endswith(".png"):
+        start_time = time.time()
         #Loading drawing
         if file.endswith('.pdf') or file.endswith(".PDF"):
             img = convert_from_path(os.path.join(folder_path, file))
@@ -192,7 +194,8 @@ for file in os.listdir(folder_path):
         
         #Masking
         mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, tables, dimensions, frame, other_info)
-        
+        end_time = time.time() 
+        times.append(end_time-start_time)
         #Postprocessing for metric computation
         if frame:
             offset = (frame.x, frame.y)
@@ -201,11 +204,11 @@ for file in os.listdir(folder_path):
         update_dimensions = []
         for dim in dimensions:
             box = dim[1]
-            pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
+            pts=np.array([(box[0] + offset), (box[1] + offset), (box[2] + offset), (box[3] + offset)])
             update_dimensions.append([dim[0], pts])
         for dim in other_info:
             box = dim[1]
-            pts=np.array([(box[0]+offset),(box[1]+offset),(box[2]+offset),(box[3]+offset)])
+            pts=np.array([(box[0] + offset), (box[1] + offset), (box[2] + offset), (box[3] + offset)])
             update_dimensions.append(['other_info', pts])      
         
         #Metrics computation
@@ -226,9 +229,10 @@ for file in os.listdir(folder_path):
         cer.append(recog_metrics['CER'])
         metrics_tools.append(m_t)
         #Display
-        cv2.imshow('boxes', mask_img)
+        cv2.imwrite(file + '.png', mask_img)
+        '''cv2.imshow('boxes', mask_img)
         cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        cv2.destroyAllWindows()'''
 
 print('------------------')
 print('Micro Average Results')
@@ -255,4 +259,5 @@ cum_pred = ''.join(row[6] for row in metrics_tools)
 cum_gt = ''.join(row[7] for row in metrics_tools)
 print('CER:',tools.train_tools.get_cer(cum_pred, cum_gt)*100, '%')
 
-
+print('------------------')
+print('Average time:', np.mean(times), 's')

@@ -1,11 +1,10 @@
 /edocr2/tools/__pycache__/
 /edocr2/keras_ocr/__pycache__/
 /edocr2/models/
-/edocr2/tools/dimension_fonts/
 /recog_samples/
 /detect_samples/
 .env
 /tests/Washers/
-/shit/
+/washers_results/
 /tests/4132864.jpg
 /__pycache__/

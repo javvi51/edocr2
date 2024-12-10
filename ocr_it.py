@@ -59,7 +59,7 @@ def ocr_drawing(file_path, recognizer_gdt, dimension_tuple, #Must have
     times.append(end_time-sum(times)-start_time)
     print('Raw output saved')
 
-    return {'tab': table_results, 'gdts': gdt_results, 'dim': dimensions, 'other': other_info}, times, updated_tables, img
+    return {'tab': table_results, 'gdts': gdt_results, 'dim': dimensions, 'other': other_info}, times, updated_tables, img, process_img
 
 def ocr_one_drawing(file_path = '/home/javvi51/edocr2/tests/test_samples/4132864.jpg'):
 

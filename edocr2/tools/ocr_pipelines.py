@@ -71,12 +71,7 @@ def ocr_tables(tables, process_img, language = None):
     
     return results, updated_tables, process_img
 
-def llm_table(tables, llm, img):
-    from edocr2.tools.llm_tools import call_vision_infoblock
-    for b in tables[0]:
-        tab_img = img[b.y : b.y + b.h, b.x : b.x + b.w][:]
-    llm_dict = call_vision_infoblock(tab_img, model=llm[0], processor=llm[1], device = llm[2], query= llm[3])
-    return llm_dict
+
 
 ##################### GDT Pipeline #####################################
 
@@ -188,7 +183,7 @@ class Pipeline:
         max_size: The maximum single-side dimension of images for
             inference.
     """
-    def __init__(self, detector, recognizer, alphabet_dimensions, cluster_t = 20, scale = 2, max_size = 1024, language = 'eng'):
+    def __init__(self, detector, recognizer, alphabet_dimensions, cluster_t = 20, scale = 2, matching_t = 0.6, max_size = 1024, language = 'eng'):
         self.scale = scale
         self.detector = detector
         self.recognizer = recognizer
@@ -196,6 +191,7 @@ class Pipeline:
         self.language = language
         self.alphabet_dimensions = alphabet_dimensions
         self.cluster_t = cluster_t
+        self.matching_t = matching_t
 
     def symbol_search(self, img, dimensions, folder_code = 'u2300', char = '⌀'):
         def template_matching(img_, cnts, folder_path, thres, angle, xy2, rotate):
@@ -282,7 +278,7 @@ class Pipeline:
                 '''pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])]).astype(np.int64)
                 mask_img = cv2.polylines(mask_img, [pts], isClosed=True, color=(0, 0, 255), thickness=2)'''
                 
-                box = template_matching(img_, cnts, folder_path, 0.5, angle, xy2, rotate)
+                box = template_matching(img_, cnts, folder_path, self.matching_t, angle, xy2, rotate)
                 
                 if box:
                     pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])]).astype(np.int64)
@@ -542,13 +538,11 @@ class Pipeline:
         cluster_t: threshold for grouping
         '''
         patches = (int(img.shape[1] / self.max_size + 2), int(img.shape[0] / self.max_size + 2))
-
         a_x = int((1 - ol) / (patches[0]) * img.shape[1]) # % of img covered in a patch (horizontal stride)
         b_x = a_x + int(ol* img.shape[1]) # Size of horizontal patch in % of img
         a_y = int((1 - ol) / (patches[1]) * img.shape[0]) # % of img covered in a patch (vertical stride)
         b_y = a_y + int(ol * img.shape[0]) # Size of horizontal patch in % of img
         box_groups = []
-
         for i in range(0, patches[0]):
             for j in range(0, patches[1]):
                 offset = (a_x * i, a_y * j)
@@ -561,14 +555,20 @@ class Pipeline:
                         for xy in b:
                             xy = xy + offset
                             box_groups.append(xy)
-         
+        '''mask_img = img.copy()
+        for box in box_groups:
+            pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])]).astype(np.dtype('int32'))
+            mask_img = cv2.polylines(mask_img, [pts], isClosed=True, color=(0, 127, 255), thickness=2)'''
         box_groups = group_polygons_by_proximity(box_groups, eps = self.cluster_t)
         box_groups = group_polygons_by_proximity(box_groups, eps = self.cluster_t-5) #To double check if still overlapping
-        print('Detection finished. Finding extra symbols...')
-        #box_groups = self.symbol_search(img, box_groups)
-        #print('Template matching finished. Performing recognition...')
+        print('Detection finished. Starting Recognition...')
         new_group = [box for box in box_groups]
+        '''for box in box_groups:
+            pts=np.array([(box[0]),(box[1]),(box[2]),(box[3])]).astype(np.dtype('int32'))
+            mask_img = cv2.polylines(mask_img, [pts], isClosed=True, color=(255, 127, 0), thickness=2)
+        cv2.imwrite('detect.png', mask_img)'''
         dimensions, other_info, dimensions_pyt = self.recognize_dimensions(np.int32(new_group), np.array(img))
+        print('Recognition finished. Performing template matching...')
         dimensions = self.symbol_search(img, dimensions)
         return dimensions, other_info, dimensions_pyt
 

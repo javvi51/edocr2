@@ -122,8 +122,8 @@ def find_rectangles(img, binary_thres = 127):
         if is_box(approx): #if cnt can be approx with only 4 points, it is a 4 side polygon
             x, y, w, h = cv2.boundingRect(cnt) #get rectangle information
             if w*h>1000: #Clean very small rectangles
-                cv2.putText(img_boxes, 'rect_'+str(r), (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 127, 83), 2) #Add rectangle tag
-                img_boxes = cv2.drawContours(img_boxes, [cnt], -1, (255, 127, 83), 2) #Plot rectangle contourn
+                #cv2.putText(img_boxes, 'rect_'+str(r), (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 127, 83), 2) #Add rectangle tag
+                img_boxes = cv2.drawContours(img_boxes, [cnt], -1, (0,127,255),4) #Plot rectangle contourn
                 rect_list.append(Rect('rect_'+str(r),x,y,w,h)) #Get a list of rectangles
                 r = r + 1
 
@@ -164,13 +164,11 @@ def find_frame(img, frame_thres):
     h_peaks, h_props = find_peaks(s_h_acc, 0.8*np.max(np.max(s_h_acc)))
     '''tmp = img.copy()
     for peak_index in v_peaks:
-        cv2.line(tmp, (peak_index, 0), (peak_index, img.shape[0]), (255, 0, 0),2)
+        cv2.line(tmp, (peak_index, 0), (peak_index, img.shape[0]), (0, 127, 255),4)
     for peak_index in h_peaks:
-        cv2.line(tmp, (0, peak_index), (img.shape[1], peak_index), (0, 0, 255),2)
+        cv2.line(tmp, (0, peak_index), (img.shape[1], peak_index), (255,127,0),4)
     
-    cv2.imshow('boxes', tmp)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()'''
+    cv2.imwrite('frame.png', tmp)'''
     # Ensure we have enough peaks to define a box
     if len(v_peaks) < 2 or len(h_peaks) < 2:
         return None  # Not enough peaks to define a frame
@@ -314,11 +312,17 @@ def segment_img(img, frame_thres = 0.85, autoframe = True, GDT_thres = 0.02, bin
     frame = False
     if autoframe:
         frame = find_frame(img, frame_thres)
-
     clusters, singles = find_clusters(rect_list)
 
     gdt_boxes, tables, dim_boxes = cluster_criteria(clusters, singles, GDT_thres * img.shape[0] * img.shape[1])
 
     if not frame:
         frame = Rect('frame', int(img.shape[1] * (1-frame_thres)/2), int(img.shape[0] * (1-frame_thres)/2), int(img.shape[1] * frame_thres), int(img.shape[0] * frame_thres))
-    return img_boxes, frame, gdt_boxes, tables, dim_boxes
+
+    filtered_gdt_boxes = [
+        {cluster: rects} for g in gdt_boxes
+        for cluster, rects in g.items()
+        if is_contained(cluster, frame)
+    ]
+    
+    return img_boxes, frame, filtered_gdt_boxes, tables, dim_boxes

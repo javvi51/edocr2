@@ -1,4 +1,5 @@
-# edocr2
+# Detailed installing instructions
+This instalation guide for edocr includes steps to install WSL, Anaconda, Cuda and VS Code. If you have experience with this, jump to step 4.
 
 ## 1. Enable Windows Subsystem for Linux (WSL)
 
@@ -24,16 +25,7 @@
 3. Add CUDA to your `.bashrc` file:
    - Follow the instructions in this [Ask Ubuntu post](https://askubuntu.com/questions/885610/nvcc-version-command-says-nvcc-is-not-installed) to configure your environment.
 
-4. Create your conda environment (Python 3.11)
-   ```bash
-   conda create -n edocr python=3.11 -y
-   conda activate edocr
-   ```
 
-4. Install **TensorFlow** with CUDA support:
-   ```bash
-   pip install tensorflow[and-cuda]
-   ```
 
 ## 3. Install and Configure VS Code
 
@@ -47,13 +39,22 @@
    ```
 
 ## 4. Install Required Python Packages
+1. Create your conda environment (Python 3.11)
+   ```bash
+   conda create -n edocr2 python=3.11 -y
+   conda activate edocr2
+   ```
 
-1. Install edocr requirements:
+2. Install **TensorFlow** with CUDA support:
+   ```bash
+   pip install tensorflow[and-cuda]
+   ```
+3. Install edocr requirements:
    ```bash
    pip install -r 'requirements.txt'
    ```
 
-2. Install **Tesseract OCR** and **pytesseract**:
+4. Install **Tesseract OCR** and **pytesseract**:
    - Install the necessary dependencies:
      ```bash
      sudo apt-get install libleptonica-dev tesseract-ocr libtesseract-dev python3-pil tesseract-ocr-eng tesseract-ocr-script-latn tesseract-ocr-nor
