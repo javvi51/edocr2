@@ -3,7 +3,6 @@ import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
 
-
 def process_json_labels(folder_path):
     def order_points_clockwise(points):
         # Find the point with the lowest x value (and lowest y if tied)
@@ -229,7 +228,7 @@ for file in os.listdir(folder_path):
         cer.append(recog_metrics['CER'])
         metrics_tools.append(m_t)
         #Display
-        cv2.imwrite(file + '.png', mask_img)
+        #cv2.imwrite(file + '.png', mask_img)
         '''cv2.imshow('boxes', mask_img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()'''

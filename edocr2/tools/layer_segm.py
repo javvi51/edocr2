@@ -15,7 +15,7 @@ class Rect():
     def __repr__(self):
         return f"{self.name} ({self.x}, {self.y}, {self.w}, {self.h})"
 
-def angle(pt0,pt1,pt2):
+def angle(pt0, pt1, pt2):
     '''get the angle of the lines conformed by pt0-pt1 and pt0-pt2
     Args: 
         pt0: np array with x,y coordinates
@@ -134,32 +134,49 @@ def find_rectangles(img, binary_thres = 127):
     return img_boxes, rect_list, hierarchy
 
 def find_frame(img, frame_thres):
+    """
+    Detects the innermost frame of a mechanical drawing within an image.
+
+    Parameters:
+    - img: Input image (assumed to be a BGR image).
+    - frame_thres: Threshold value to determine the minimum size of a valid frame as a fraction of image dimensions.
+
+    Returns:
+    - best_frame: A Rect object representing the detected frame, or None if no valid frame is found.
+    """
     from scipy.signal import find_peaks
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.bilateralFilter(gray, 11, 61, 39)
     edges = cv2.Canny(blurred, 0, 255)
     kernel = np.ones((5, 5), np.uint8) 
     edges = cv2.dilate(edges, kernel, iterations=1 )
 
+    # Create structuring elements for detecting vertical and horizontal lines
     v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1,20))
     h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (20,1))
 
+    # Extract vertical and horizontal lines using morphological operations
     v_morphed = cv2.morphologyEx(edges, cv2.MORPH_OPEN, v_kernel, iterations=2)
     v_morphed = cv2.dilate(v_morphed, None)
     h_morphed = cv2.morphologyEx(edges, cv2.MORPH_OPEN, h_kernel, iterations=2)
     h_morphed = cv2.dilate(h_morphed, None)
 
+    # Reduce vertical and horizontal lines to their respective projections
     v_acc = cv2.reduce(v_morphed, 0, cv2.REDUCE_SUM, dtype=cv2.CV_32S)
     h_acc = cv2.reduce(h_morphed, 1, cv2.REDUCE_SUM, dtype=cv2.CV_32S)
 
+    # Define a helper function to smooth projections
     def smooth(y, box_pts):
         box = np.ones(box_pts)/box_pts
         y_smooth = np.convolve(y, box, mode='same')
         return y_smooth
 
+    # Smooth the vertical and horizontal projections
     s_v_acc = smooth(v_acc[0,:],9) 
     s_h_acc = smooth(h_acc[:,0],9) 
 
+    # Detect peaks in the smoothed projections
     v_peaks, v_props = find_peaks(s_v_acc, 0.8*np.max(np.max(s_v_acc)))
     h_peaks, h_props = find_peaks(s_h_acc, 0.8*np.max(np.max(s_h_acc)))
     '''tmp = img.copy()
@@ -176,6 +193,16 @@ def find_frame(img, frame_thres):
     min_frame_tup = (img.shape[0] * frame_thres, img.shape[1] * frame_thres) #(y,x)
     
     def find_best_peaks(peaks, v_h): #v_h is a int= 0 or 1 to identify if we are talking vertical or horizontal peaks
+        """
+        Identifies the best pair of peaks to define a frame along a given dimension.
+
+        Parameters:
+        - peaks: Detected peaks in the dimension.
+        - v_h: Indicator (0 for vertical, 1 for horizontal).
+        
+        Returns:
+        - A tuple (max_p, min_p) representing the selected peaks.
+        """
         min_peaks = np.array([peak for peak in peaks if peak < img.shape[v_h] / 2])
         max_peaks = np.array([peak for peak in peaks if peak > img.shape[v_h] / 2])
         min_frame = min_frame_tup[v_h]
@@ -190,11 +217,11 @@ def find_frame(img, frame_thres):
             min_p = min_peaks[min_idx]
             return max_p, min_p
     
+    # Return the best (innermost) frame found
     bottom, top = find_best_peaks(h_peaks, 0)
     right, left = find_best_peaks(v_peaks, 1)
     best_frame = Rect('frame', left, top, right - left, bottom - top)
-
-    # Return the best (innermost) frame found
+   
     return best_frame
 
 def touching_box(cl, cl_fire, thres=1.1):
@@ -244,6 +271,19 @@ def fire_propagation(class_list, cl_fire):
     return burnt
 
 def find_clusters(rect_list):
+    """
+    Groups rectangles into clusters based on their proximity and state.
+    Clusters are defined as groups of rectangles where at least one rectangle
+    propagates its "green" state to its neighbors.
+
+    Parameters:
+    - rect_list: List of Rect objects to be clustered.
+
+    Returns:
+    - clusters: A list of dictionaries, where each dictionary contains a 
+      covering Rect as the key and a list of the clustered Rect objects as the value.
+    - singles: A list of Rect objects that do not belong to any cluster.
+    """
     new_list =[]
     for rect in rect_list:
         if len(rect.children) == 0:
@@ -274,6 +314,19 @@ def find_clusters(rect_list):
     return clusters, singles
 
 def cluster_criteria(clusters, singles,  GDT_thres):
+    """
+    Classifies clusters and single rectangles into categories based on size and containment.
+
+    Parameters:
+    - clusters: A list of clusters (each represented as a dictionary of a covering rectangle and its members).
+    - singles: A list of single Rect objects not part of any cluster.
+    - GDT_thres: A threshold for determining the size of large objects (e.g., tables vs GD&T boxes).
+
+    Returns:
+    - gdt: A list of clusters classified as GD&T boxes (smaller than the threshold).
+    - tab: A list of clusters classified as tables (larger than the threshold).
+    - dim: A list of single rectangles classified as dimensions (not contained in any cluster and small).
+    """
     gdt, tab, dim = [], [], []
     for cl in clusters:
         for k_cl in cl:

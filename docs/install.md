@@ -1,5 +1,5 @@
 # Detailed installing instructions
-This instalation guide for edocr includes steps to install WSL, Anaconda, Cuda and VS Code. If you have experience with this, jump to step 4.
+This instalation guide for edocr2 includes steps to install WSL, Anaconda, Cuda and VS Code. If you have experience with this, jump to step 4.
 
 ## 1. Enable Windows Subsystem for Linux (WSL)
 

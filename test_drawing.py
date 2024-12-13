@@ -1,10 +1,12 @@
-import cv2, string, time, os
+import cv2, time, os
 import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
-           
-file_path = 'tests/test_samples/example_dwg.png'
 
+file_path = 'tests/test_samples/example_dwg.png'
+language = 'eng'
+
+#Opening the file        
 if file_path.endswith('.pdf') or file_path.endswith(".PDF"):
     img = convert_from_path(file_path)
     img = np.array(img[0])
@@ -13,15 +15,12 @@ else:
 
 filename = os.path.splitext(os.path.basename(file_path))[0]
 output_path = os.path.join('.', filename)
-language = 'swe'
+
 
 #region ############ Segmentation Task ####################
-start_time = time.time()
 
 img_boxes, frame, gdt_boxes, tables, dim_boxes  = tools.layer_segm.segment_img(img, autoframe = True, frame_thres=0.7, GDT_thres = 0.02, binary_thres=127)
-end_time = time.time()
-#cv2.imwrite('boxes.png', img_boxes)
-print(f"\033[1;33mSegmentation took {end_time - start_time:.6f} seconds to run.\033[0m")
+
 #endregion
 
 #region ######## Set Session ##############################
@@ -58,29 +57,22 @@ print(f"\033[1;33mLoading session took {end_time - start_time:.6f} seconds to ru
 #endregion
 
 #region ############ OCR Tables ###########################
-start_time = time.time()
 process_img = img.copy()
 table_results, updated_tables, process_img= tools.ocr_pipelines.ocr_tables(tables, process_img, language)
-end_time = time.time()
-print(f"\033[1;33mOCR in tables took {end_time - start_time:.6f} seconds to run.\033[0m")
+
 #endregion
 
 #region ############ OCR GD&T #############################
-start_time = time.time()
+
 gdt_results, updated_gdt_boxes, process_img = tools.ocr_pipelines.ocr_gdt(process_img, gdt_boxes, recognizer_gdt)
-end_time = time.time()
-print(f"\033[1;33mOCR in GD&T took {end_time - start_time:.6f} seconds to run.\033[0m")
+
 #endregion
 
 #region ############ OCR Dimensions #######################
-start_time = time.time()
-
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
 dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1240, language=language, backg_save=False)
 
-end_time = time.time()
-print(f"\033[1;33mOCR in dimensions took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
 #region ############# Qwen for tables #####################
@@ -95,17 +87,14 @@ if qwen:
 #endregion
 
 #region ########### Output ################################
-start_time = time.time()
-mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame, other_info)
 
+mask_img = tools.output_tools.mask_img(img, updated_gdt_boxes, updated_tables, dimensions, frame, other_info)
 table_results, gdt_results, dimensions, other_info = tools.output_tools.process_raw_output(output_path, table_results, gdt_results, dimensions, other_info, save=False)
 
-end_time = time.time()
-print(f"\033[1;33mRaw output generation took {end_time - start_time:.6f} seconds to run.\033[0m")
 #endregion
 
 
 ###################################################
-cv2.imshow('boxes', mask_img)
+cv2.imshow('Mask Image', mask_img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()

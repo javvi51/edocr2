@@ -1,69 +1,23 @@
-# edocr2
+# eDOCr2
 
-## 1. Enable Windows Subsystem for Linux (WSL)
+A tool for performing segmentation and OCR on engineering drawings, primarily focused on mechanical or production drawings.
 
-1. Open **PowerShell** as Administrator and run the following command to install WSL:
-    ```bash
-    wsl --install
-    ```
-2. Go to **Turn Windows features on or off** and ensure the following features are enabled:
-   - **Virtual Machine Platform**
-   - **Windows Subsystem for Linux**
+## Installation
 
-## 2. Set Up Anaconda and Cuda in WSL
+Detailed installation steps can be found [here](https://github.com/javvi51/edocr2/blob/main/docs/install.md).
 
-1. Open the Ubuntu terminal in WSL and install **Anaconda**:
-   - Check the latest version of Anaconda from [Anaconda Archive](https://repo.anaconda.com/archive/).
-   - Run the following command (replace with the latest version):
-     ```bash
-     wget https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh
-     ```
-   
-2. Install **CUDA 11.8** from the [Nvidia CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit).
+## How to Use
 
-3. Add CUDA to your `.bashrc` file:
-   - Follow the instructions in this [Ask Ubuntu post](https://askubuntu.com/questions/885610/nvcc-version-command-says-nvcc-is-not-installed) to configure your environment.
+For quick testing, run the `test_drawing.py` file after downloading the recognizer models from [Releases](https://github.com/javvi51/edocr2/releases).
 
-4. Create your conda environment (Python 3.11)
-   ```bash
-   conda create -n edocr python=3.11 -y
-   conda activate edocr
-   ```
+Other files are provided for additional functionality:
+- **`test_train.py`**: For training custom synthetic recognizers or detectors.
+- **`test_all.py`**: For benchmarking against all drawings available in the `/tests` folder.
+- **`test_llm.py`**: For integration with language models (LLMs).
 
-4. Install **TensorFlow** with CUDA support:
-   ```bash
-   pip install tensorflow[and-cuda]
-   ```
+For more detailed information about using these files, refer to the [Examples](https://github.com/javvi51/edocr2/blob/main/docs/examples.md) documentation.
 
-## 3. Install and Configure VS Code
+## Citation
 
-1. Install **Visual Studio Code**:
-   ```bash
-   sudo apt install code
-   ```
-2. Open the project in VS Code:
-   ```bash
-   code .
-   ```
-
-## 4. Install Required Python Packages
-
-1. Install edocr requirements:
-   ```bash
-   pip install -r 'requirements.txt'
-   ```
-
-2. Install **Tesseract OCR** and **pytesseract**:
-   - Install the necessary dependencies:
-     ```bash
-     sudo apt-get install libleptonica-dev tesseract-ocr libtesseract-dev python3-pil tesseract-ocr-eng tesseract-ocr-script-latn tesseract-ocr-nor
-     ```
-   - For swedish:
-     ```bash
-     sudo apt-get install tesseract-ocr-swe
-     ```
-   - Install Tesseract and pytesseract:
-     ```bash
-     pip install tesseract
-     pip install pytesseract
-     ```
+If you find this project useful in your research, please consider citing our paper (preprint):  
+[http://dx.doi.org/10.2139/ssrn.5045921](http://dx.doi.org/10.2139/ssrn.5045921)

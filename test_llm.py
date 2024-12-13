@@ -33,12 +33,13 @@ for file in os.listdir(folder_path):
             process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]      
         imgs.append(process_img)
 #endregion
-       
+
+#region ############ Testing edocr2 (Qwen) and edocr2 (GPT4o)       
 for i in range(len(imgs)):
     file = os.listdir(folder_path)[i]
     filename = os.path.splitext(os.path.basename(file))[0]
     process_img = imgs[i]
-    #region ########### Qwen ###################################
+    # Qwen ###################################
     if qwen:
         device = "cuda:1"
         model, processor = tools.llm_tools.load_VL(model_name = "Qwen/Qwen2-VL-7B-Instruct")
@@ -47,9 +48,8 @@ for i in range(len(imgs)):
             file.write(f'{filename} Qwen dimensions:\n')
             file.write("  ".join(str(item) for item in llm_dim_qwen))
             file.write('\n')
-    #endregion
 
-    #region ############ GPT4 #################################
+    # GPT4 #################################
     if edocr_gpt:
         llm_dim_gpt = tools.llm_tools.gpt4_dim(process_img)
         with open(output, 'a') as file:
@@ -57,9 +57,9 @@ for i in range(len(imgs)):
             file.write("; ".join(str(item) for item in llm_dim_gpt))
             file.write('\n')
 
-    #endregion
+#endregion
 
-#region RawGPT ########################################
+#region ###########RawGPT #############################
 if raw_gpt:
     for file in os.listdir(folder_path):
         if file.endswith(".jpg") or file.endswith(".png"):
