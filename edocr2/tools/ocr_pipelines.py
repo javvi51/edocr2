@@ -382,8 +382,8 @@ class Pipeline:
     def dimension_criteria(self, img):
         pred_nor = self.ocr_the_rest(img, 'nor') #Norwegian include a char for the o-slash (Ø and ø) Convinient for the diameter recognition ⌀
         pred_eng = self.ocr_the_rest(img, 'eng') #However, its performance is worse than english, can't trust it
-        allowed_exceptions_nor = set('''-.»Ø,/!«Æ()Å:'"[];|“?Ö=*Ä”&É<>+$£%—€øåæöéIZNOoPXiLl \n''')
-        allowed_exceptions_eng = set('''?—!@#~;¢«#_%\&€$»[é]®§¥©‘™="~'£<*“”I|ZNOXiLl \n''')
+        allowed_exceptions_nor = set('''-.»Ø,/!«Æ()Å:'"[];|“?Ö=*Ä”&É<>+$£%—€øåæöéIZNOoPXiLlk \n''')
+        allowed_exceptions_eng = set('''?—!@#~;¢«#_%\&€$»[é]®§¥©‘™="~'£<*“”I|ZNOXiLlk \n''')
         ok_nor = all(char in set(self.alphabet_dimensions) or char in allowed_exceptions_nor for char in pred_nor)
         ok_eng = all(char in set(self.alphabet_dimensions) or char in allowed_exceptions_eng for char in pred_eng)
         if ok_nor or ok_eng or len(pred_eng) < 2 or len(pred_nor) < 2:

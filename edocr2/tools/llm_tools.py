@@ -115,6 +115,13 @@ def llm_table(tables, llm, img, device, query):
     llm_dict = call_VL(model=llm[0], processor=llm[1], device = device, messages = messages)
     return llm_dict
 
+def convert_img(img):
+    pil_img=Image.fromarray(img)
+    buf = io.BytesIO()
+    pil_img.save(buf, format='JPEG')
+    byte_im = buf.getvalue()
+    return base64.b64encode(byte_im).decode('utf-8')
+
 def gpt4_dim(img):
     """
     This function uses GPT-4 to extract dimensions from a mechanical drawing image using OCR.
@@ -125,13 +132,7 @@ def gpt4_dim(img):
     Returns:
         list: A Python list of strings containing extracted dimensions from the image.
     """
-    def convert_img(img):
-        pil_img=Image.fromarray(img)
-        buf = io.BytesIO()
-        pil_img.save(buf, format='JPEG')
-        byte_im = buf.getvalue()
-        return base64.b64encode(byte_im).decode('utf-8')
-
+    
     from openai import OpenAI
     
     load_dotenv()
@@ -156,3 +157,16 @@ def gpt4_dim(img):
     cleaned_output = assistant_response.strip('```python\n```')
     # Convert the cleaned string into a dictionary
     return ast.literal_eval(cleaned_output)
+
+def ask_gpt(messages):
+
+    from openai import OpenAI
+    
+    load_dotenv()
+    API_KEY = os.getenv("OPENAI_API_KEY")
+    client = OpenAI(api_key=API_KEY)
+
+    response = client.chat.completions.create(model="gpt-4o", messages=messages, max_tokens=3000)
+    assistant_response=response.choices[0].message.content
+
+    return assistant_response

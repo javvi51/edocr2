@@ -3,13 +3,16 @@ import numpy as np
 from edocr2 import tools
 from pdf2image import convert_from_path
 
-file_path = 'tests/test_samples/example_dwg.png'
+file_path = 'tests/test_samples/Candle_holder.jpg'
 language = 'eng'
 
 #Opening the file        
 if file_path.endswith('.pdf') or file_path.endswith(".PDF"):
     img = convert_from_path(file_path)
     img = np.array(img[0])
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, img = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+    img = cv2.merge([img, img, img])
 else:
     img = cv2.imread(file_path)
 
@@ -71,7 +74,8 @@ gdt_results, updated_gdt_boxes, process_img = tools.ocr_pipelines.ocr_gdt(proces
 #region ############ OCR Dimensions #######################
 if frame:
     process_img = process_img[frame.y : frame.y + frame.h, frame.x : frame.x + frame.w]
-dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1240, language=language, backg_save=False)
+process_img_ = process_img.copy()
+dimensions, other_info, process_img, dim_tess = tools.ocr_pipelines.ocr_dimensions(process_img, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1048, language=language, backg_save=False)
 
 #endregion
 
@@ -93,8 +97,50 @@ table_results, gdt_results, dimensions, other_info = tools.output_tools.process_
 
 #endregion
 
+for b in tables[0]:
+    infoblock_img = img[b.y : b.y + b.h, b.x : b.x + b.w][:]
+
+infoblock_img = tools.llm_tools.convert_img(infoblock_img)
+drw_img = tools.llm_tools.convert_img(process_img_)
+manuf = False
+quality = False
+
+#region ########## Manufacturability ################
+if manuf:
+    messages = [
+            {"role": "system",
+                "content": [{"type": "text", "text": '''You are a specialized OCR system capable of reading mechanical drawings.'''},],
+            },
+            {"role": "user",
+                "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{infoblock_img}", "detail": "high"}},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{drw_img}", "detail": "high"}},
+                            {"type": "text", "text": '''You are getting the inforamtion block of the drawing in the first image, and the views of the part in the second. 
+                            I need you to tell me a PYTHON DICTIONARY with the manufacturing processes (keys) and short description (values)  that are best for this part.'''},],
+            }]
+
+    answer = tools.llm_tools.ask_gpt(messages)
+    print('Manufacturing Answer: \n', answer)
+#endregion
+
+#region ######### Quality Control Check ##############
+if quality:
+    messages = [
+            {"role": "system",
+                "content": [{"type": "text", "text": '''You are a specialized OCR system capable of reading mechanical drawings.'''},],
+            },
+            {"role": "user",
+                "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{infoblock_img}", "detail": "high"}},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{drw_img}", "detail": "high"}},
+                            {"type": "text", "text": '''You are getting the inforamtion block of the drawing in the first image, and the views of the part in the second. 
+                            I need you to tell me IN A PYTHON LIST ONLY WHICH MEASUREMENTS -NUMERICAL VALUE AND TOLERANCE-  needs to be checked in the quality control process'''},],
+            }]
+
+    answer = tools.llm_tools.ask_gpt(messages)
+    print('Quality Control Answer: \n', answer)
+#endregion
 
 ###################################################
-cv2.imshow('Mask Image', mask_img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+#cv2.imwrite('liu.png', mask_img)
+#cv2.imshow('Mask Image', mask_img)
+#cv2.waitKey(0)
+#cv2.destroyAllWindows()

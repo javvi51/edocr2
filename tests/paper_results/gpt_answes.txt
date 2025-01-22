@@ -1,0 +1,19 @@
+Manufacturing Answer: 
+```python
+manufacturing_processes = {
+    "Turning": "Used for creating the cylindrical shape of the part, including the outer diameters and chamfers.",
+    "Drilling/Boring": "To achieve the internal diameter and the countersink specified in section A-A.",
+    "Milling": "For creating the flat surfaces if needed, and refining any features not achievable by turning.",
+    "Reaming": "To ensure the internal diameter of Ø21.5±0.1 is precise and smooth.",
+    "Grinding": "To achieve the surface finish required on precise diameters, such as Ø38 H12.",
+    "Deburring": "To break all sharp edges and remove burrs as specified in the drawing notes.",
+}
+```
+
+Quality Control Answer: 
+
+ ```python
+[
+    "Ø21.5±0.1",
+    "Ø38 H12"
+]
